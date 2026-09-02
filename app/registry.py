@@ -5,6 +5,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'plugins'))
 
 from plugins.java_to_python import JavaToPythonPlugin
 from plugins.php_to_node import PhpToNodePlugin
+from plugins.sql_to_postgres import SqlToPostgresPlugin
 
 
 class PluginRegistry:
@@ -14,6 +15,7 @@ class PluginRegistry:
         self._plugins = [
             JavaToPythonPlugin(),
             PhpToNodePlugin(),
+            SqlToPostgresPlugin(),
         ]
 
     def get_plugins_for(self, source_type: str):
