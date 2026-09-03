@@ -23,30 +23,36 @@ class SqlToPostgresPlugin(ModernizerPlugin):
         return "MySQL → PostgreSQL Schema Migrator"
 
     def _extract_sql_only(self, text: str) -> str:
-        """
-        SQL DDL has a very recognizable shape - it starts with a statement
-        keyword (CREATE/ALTER/etc.) and ends with a semicolon. We use that
-        shape to strip away any prose the model added before/after, even if
-        it didn't use any markdown or [TAG] wrapper we could detect generically.
-        """
-        # Find the first SQL statement keyword, case-insensitive
         match = re.search(r'\b(CREATE|ALTER|DROP)\s+TABLE\b', text, re.IGNORECASE)
         if not match:
-            # No recognizable SQL found - fall back to returning as-is
             return text.strip()
-
         start = match.start()
-
-        # Find the LAST semicolon in the text - that's the end of the SQL block
         last_semicolon = text.rfind(";")
         if last_semicolon == -1 or last_semicolon < start:
-            # No semicolon found after our start point - just return from start onward
             return text[start:].strip()
-
         return text[start:last_semicolon + 1].strip()
 
-    def convert(self, content: str) -> str:
-        prompt = (
+    def _is_structurally_valid(self, sql: str) -> tuple[bool, str]:
+        """
+        Not a full SQL parser - just catches the most common breakage:
+        missing/mismatched parentheses, or no recognizable statement at all.
+        Returns (is_valid, error_description).
+        """
+        if not re.search(r'\b(CREATE|ALTER|DROP)\s+TABLE\b', sql, re.IGNORECASE):
+            return False, "No CREATE/ALTER/DROP TABLE statement found"
+
+        open_count = sql.count("(")
+        close_count = sql.count(")")
+        if open_count != close_count:
+            return False, f"Mismatched parentheses ({open_count} open, {close_count} close)"
+
+        if not sql.rstrip().endswith(";"):
+            return False, "Output does not end with a semicolon - may be truncated"
+
+        return True, ""
+
+    def _build_prompt(self, content: str, retry: bool = False, error: str = "") -> str:
+        base = (
             "Convert the following MySQL schema (DDL) to valid PostgreSQL DDL.\n\n"
             "REQUIRED TRANSLATIONS:\n"
             "1. Replace AUTO_INCREMENT columns with SERIAL (for INT) or BIGSERIAL (for BIGINT).\n"
@@ -59,9 +65,41 @@ class SqlToPostgresPlugin(ModernizerPlugin):
             "6. If a column has 'ON UPDATE CURRENT_TIMESTAMP', remove that clause from the column "
             "definition and instead add a comment above the table noting that a trigger is needed "
             "to replicate this behavior in PostgreSQL (PostgreSQL has no inline equivalent).\n\n"
+        )
+        if retry:
+            base += (
+                f"IMPORTANT: Your previous attempt had a structural problem: {error}\n"
+                "Please fix this and return complete, well-formed PostgreSQL DDL.\n\n"
+            )
+        base += (
             "Return ONLY the PostgreSQL DDL code, no explanation, no markdown fences.\n\n"
             f"MySQL schema:\n{content}"
         )
-        raw_output = ask_ollama(prompt)
-        cleaned = clean_code_output(raw_output)
-        return self._extract_sql_only(cleaned)
+        return base
+
+    def convert(self, content: str) -> str:
+        print("  [convert] Calling Ollama (attempt 1)...", flush=True)
+        raw_output = ask_ollama(self._build_prompt(content, retry=False))
+        cleaned = self._extract_sql_only(clean_code_output(raw_output))
+
+        is_valid, error = self._is_structurally_valid(cleaned)
+        if is_valid:
+            print("  [convert] Attempt 1 is structurally valid.", flush=True)
+            return cleaned
+
+        print(f"  [convert] Attempt 1 invalid ({error}), retrying...", flush=True)
+        raw_retry = ask_ollama(self._build_prompt(content, retry=True, error=error))
+        cleaned_retry = self._extract_sql_only(clean_code_output(raw_retry))
+
+        is_valid_retry, error_retry = self._is_structurally_valid(cleaned_retry)
+        if is_valid_retry:
+            print("  [convert] Retry is structurally valid.", flush=True)
+            return cleaned_retry
+
+        print("  [convert] Still invalid after retry, returning with warning.", flush=True)
+        warning = (
+            "-- ⚠️ WARNING: This SQL failed structural validation even after a\n"
+            f"-- retry ({error_retry}). It may be incomplete or malformed.\n"
+            "-- Please review manually before running against a database.\n\n"
+        )
+        return warning + cleaned_retry
