@@ -1,5 +1,6 @@
 import sys
 import os
+import re
 
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
@@ -21,6 +22,29 @@ class SqlToPostgresPlugin(ModernizerPlugin):
     def name(self) -> str:
         return "MySQL → PostgreSQL Schema Migrator"
 
+    def _extract_sql_only(self, text: str) -> str:
+        """
+        SQL DDL has a very recognizable shape - it starts with a statement
+        keyword (CREATE/ALTER/etc.) and ends with a semicolon. We use that
+        shape to strip away any prose the model added before/after, even if
+        it didn't use any markdown or [TAG] wrapper we could detect generically.
+        """
+        # Find the first SQL statement keyword, case-insensitive
+        match = re.search(r'\b(CREATE|ALTER|DROP)\s+TABLE\b', text, re.IGNORECASE)
+        if not match:
+            # No recognizable SQL found - fall back to returning as-is
+            return text.strip()
+
+        start = match.start()
+
+        # Find the LAST semicolon in the text - that's the end of the SQL block
+        last_semicolon = text.rfind(";")
+        if last_semicolon == -1 or last_semicolon < start:
+            # No semicolon found after our start point - just return from start onward
+            return text[start:].strip()
+
+        return text[start:last_semicolon + 1].strip()
+
     def convert(self, content: str) -> str:
         prompt = (
             "Convert the following MySQL schema (DDL) to valid PostgreSQL DDL.\n\n"
@@ -39,4 +63,5 @@ class SqlToPostgresPlugin(ModernizerPlugin):
             f"MySQL schema:\n{content}"
         )
         raw_output = ask_ollama(prompt)
-        return clean_code_output(raw_output)
+        cleaned = clean_code_output(raw_output)
+        return self._extract_sql_only(cleaned)
