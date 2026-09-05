@@ -1,0 +1,140 @@
+{
+  "tables": [
+    {
+      "name": "members",
+      "columns": [
+        {
+          "name": "id",
+          "type": "NUMBER",
+          "length": 22,
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "VARCHAR2",
+          "length": 100,
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "email",
+          "type": "VARCHAR2",
+          "length": 150,
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "join_date",
+          "type": "DATE",
+          "length": 7,
+          "nullable": true,
+          "default": "SYSDATE"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": []
+    },
+    {
+      "name": "books",
+      "columns": [
+        {
+          "name": "id",
+          "type": "NUMBER",
+          "length": 22,
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "title",
+          "type": "VARCHAR2",
+          "length": 200,
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "author",
+          "type": "VARCHAR2",
+          "length": 150,
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "isbn",
+          "type": "VARCHAR2",
+          "length": 20,
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "available",
+          "type": "NUMBER",
+          "length": 22,
+          "nullable": true,
+          "default": "1  -- 1 = available, 0 = checked out"
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": []
+    },
+    {
+      "name": "loans",
+      "columns": [
+        {
+          "name": "id",
+          "type": "NUMBER",
+          "length": 22,
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "member_id",
+          "type": "NUMBER",
+          "length": 22,
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "book_id",
+          "type": "NUMBER",
+          "length": 22,
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "loan_date",
+          "type": "DATE",
+          "length": 7,
+          "nullable": true,
+          "default": "SYSDATE"
+        },
+        {
+          "name": "return_date",
+          "type": "DATE",
+          "length": 7,
+          "nullable": true,
+          "default": null
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column": "member_id",
+          "references_table": "members",
+          "references_column": "id"
+        },
+        {
+          "column": "book_id",
+          "references_table": "books",
+          "references_column": "id"
+        }
+      ]
+    }
+  ]
+}
