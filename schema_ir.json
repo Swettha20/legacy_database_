@@ -1,0 +1,171 @@
+{
+  "source": "oracle",
+  "tables": [
+    {
+      "name": "members",
+      "columns": [
+        {
+          "name": "id",
+          "source_type": "NUMBER",
+          "length": 22,
+          "nullable": false,
+          "has_default": true,
+          "is_auto_increment": true
+        },
+        {
+          "name": "name",
+          "source_type": "VARCHAR2",
+          "length": 100,
+          "nullable": false,
+          "has_default": false,
+          "is_auto_increment": false
+        },
+        {
+          "name": "email",
+          "source_type": "VARCHAR2",
+          "length": 150,
+          "nullable": false,
+          "has_default": false,
+          "is_auto_increment": false
+        },
+        {
+          "name": "join_date",
+          "source_type": "DATE",
+          "length": 7,
+          "nullable": false,
+          "has_default": true,
+          "is_auto_increment": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": []
+    },
+    {
+      "name": "books",
+      "columns": [
+        {
+          "name": "id",
+          "source_type": "NUMBER",
+          "length": 22,
+          "nullable": false,
+          "has_default": true,
+          "is_auto_increment": true
+        },
+        {
+          "name": "title",
+          "source_type": "VARCHAR2",
+          "length": 200,
+          "nullable": false,
+          "has_default": false,
+          "is_auto_increment": false
+        },
+        {
+          "name": "author",
+          "source_type": "VARCHAR2",
+          "length": 150,
+          "nullable": false,
+          "has_default": false,
+          "is_auto_increment": false
+        },
+        {
+          "name": "isbn",
+          "source_type": "VARCHAR2",
+          "length": 20,
+          "nullable": false,
+          "has_default": false,
+          "is_auto_increment": false
+        },
+        {
+          "name": "total_copies",
+          "source_type": "NUMBER",
+          "length": 22,
+          "nullable": false,
+          "has_default": false,
+          "is_auto_increment": false
+        },
+        {
+          "name": "available_copies",
+          "source_type": "NUMBER",
+          "length": 22,
+          "nullable": false,
+          "has_default": false,
+          "is_auto_increment": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": []
+    },
+    {
+      "name": "loans",
+      "columns": [
+        {
+          "name": "id",
+          "source_type": "NUMBER",
+          "length": 22,
+          "nullable": false,
+          "has_default": true,
+          "is_auto_increment": true
+        },
+        {
+          "name": "member_id",
+          "source_type": "NUMBER",
+          "length": 22,
+          "nullable": false,
+          "has_default": false,
+          "is_auto_increment": false
+        },
+        {
+          "name": "book_id",
+          "source_type": "NUMBER",
+          "length": 22,
+          "nullable": false,
+          "has_default": false,
+          "is_auto_increment": false
+        },
+        {
+          "name": "loan_date",
+          "source_type": "DATE",
+          "length": 7,
+          "nullable": false,
+          "has_default": true,
+          "is_auto_increment": false
+        },
+        {
+          "name": "due_date",
+          "source_type": "DATE",
+          "length": 7,
+          "nullable": false,
+          "has_default": false,
+          "is_auto_increment": false
+        },
+        {
+          "name": "return_date",
+          "source_type": "DATE",
+          "length": 7,
+          "nullable": true,
+          "has_default": false,
+          "is_auto_increment": false
+        }
+      ],
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column": "member_id",
+          "references_table": "members",
+          "references_column": "id"
+        },
+        {
+          "column": "book_id",
+          "references_table": "books",
+          "references_column": "id"
+        }
+      ]
+    }
+  ]
+}
