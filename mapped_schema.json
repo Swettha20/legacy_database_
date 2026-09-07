@@ -1,0 +1,170 @@
+{
+  "tables": [
+    {
+      "name": "members",
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [],
+      "columns": [
+        {
+          "name": "id",
+          "source_type": "NUMBER",
+          "nullable": false,
+          "pg_type": "SERIAL",
+          "confidence": "high",
+          "note": "Auto-increment column (Oracle sequence.nextval) mapped to SERIAL"
+        },
+        {
+          "name": "name",
+          "source_type": "VARCHAR2",
+          "nullable": false,
+          "pg_type": "VARCHAR(100)",
+          "confidence": "high",
+          "note": "Direct equivalent - Postgres VARCHAR behaves the same way"
+        },
+        {
+          "name": "email",
+          "source_type": "VARCHAR2",
+          "nullable": false,
+          "pg_type": "VARCHAR(150)",
+          "confidence": "high",
+          "note": "Direct equivalent - Postgres VARCHAR behaves the same way"
+        },
+        {
+          "name": "join_date",
+          "source_type": "DATE",
+          "nullable": false,
+          "pg_type": "TIMESTAMP",
+          "confidence": "high",
+          "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)"
+        }
+      ]
+    },
+    {
+      "name": "books",
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [],
+      "columns": [
+        {
+          "name": "id",
+          "source_type": "NUMBER",
+          "nullable": false,
+          "pg_type": "SERIAL",
+          "confidence": "high",
+          "note": "Auto-increment column (Oracle sequence.nextval) mapped to SERIAL"
+        },
+        {
+          "name": "title",
+          "source_type": "VARCHAR2",
+          "nullable": false,
+          "pg_type": "VARCHAR(200)",
+          "confidence": "high",
+          "note": "Direct equivalent - Postgres VARCHAR behaves the same way"
+        },
+        {
+          "name": "author",
+          "source_type": "VARCHAR2",
+          "nullable": false,
+          "pg_type": "VARCHAR(150)",
+          "confidence": "high",
+          "note": "Direct equivalent - Postgres VARCHAR behaves the same way"
+        },
+        {
+          "name": "isbn",
+          "source_type": "VARCHAR2",
+          "nullable": false,
+          "pg_type": "VARCHAR(20)",
+          "confidence": "high",
+          "note": "Direct equivalent - Postgres VARCHAR behaves the same way"
+        },
+        {
+          "name": "total_copies",
+          "source_type": "NUMBER",
+          "nullable": false,
+          "pg_type": "NUMERIC",
+          "confidence": "needs_review",
+          "note": "Oracle NUMBER has no fixed precision/scale visible here - defaulted to NUMERIC (safe for both integers and decimals), but please confirm this is the intended type"
+        },
+        {
+          "name": "available_copies",
+          "source_type": "NUMBER",
+          "nullable": false,
+          "pg_type": "NUMERIC",
+          "confidence": "needs_review",
+          "note": "Oracle NUMBER has no fixed precision/scale visible here - defaulted to NUMERIC (safe for both integers and decimals), but please confirm this is the intended type"
+        }
+      ]
+    },
+    {
+      "name": "loans",
+      "primary_key": [
+        "id"
+      ],
+      "foreign_keys": [
+        {
+          "column": "member_id",
+          "references_table": "members",
+          "references_column": "id"
+        },
+        {
+          "column": "book_id",
+          "references_table": "books",
+          "references_column": "id"
+        }
+      ],
+      "columns": [
+        {
+          "name": "id",
+          "source_type": "NUMBER",
+          "nullable": false,
+          "pg_type": "SERIAL",
+          "confidence": "high",
+          "note": "Auto-increment column (Oracle sequence.nextval) mapped to SERIAL"
+        },
+        {
+          "name": "member_id",
+          "source_type": "NUMBER",
+          "nullable": false,
+          "pg_type": "NUMERIC",
+          "confidence": "needs_review",
+          "note": "Oracle NUMBER has no fixed precision/scale visible here - defaulted to NUMERIC (safe for both integers and decimals), but please confirm this is the intended type"
+        },
+        {
+          "name": "book_id",
+          "source_type": "NUMBER",
+          "nullable": false,
+          "pg_type": "NUMERIC",
+          "confidence": "needs_review",
+          "note": "Oracle NUMBER has no fixed precision/scale visible here - defaulted to NUMERIC (safe for both integers and decimals), but please confirm this is the intended type"
+        },
+        {
+          "name": "loan_date",
+          "source_type": "DATE",
+          "nullable": false,
+          "pg_type": "TIMESTAMP",
+          "confidence": "high",
+          "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)"
+        },
+        {
+          "name": "due_date",
+          "source_type": "DATE",
+          "nullable": false,
+          "pg_type": "TIMESTAMP",
+          "confidence": "high",
+          "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)"
+        },
+        {
+          "name": "return_date",
+          "source_type": "DATE",
+          "nullable": true,
+          "pg_type": "TIMESTAMP",
+          "confidence": "high",
+          "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)"
+        }
+      ]
+    }
+  ]
+}
