@@ -1,71 +1,39 @@
 {
-<<<<<<< HEAD
-  "source": "oracle",
-=======
->>>>>>> f33bb88c5c8a6f05471613a03b01a9213f0b607c
   "tables": [
     {
       "name": "members",
       "columns": [
         {
           "name": "id",
-<<<<<<< HEAD
-          "source_type": "NUMBER",
+          "type": "NUMBER",
           "length": 22,
           "nullable": false,
-          "has_default": true,
+          "default": "\"SYSTEM\".\"ISEQ$$_75856\".nextval",
           "is_auto_increment": true
         },
         {
           "name": "name",
-          "source_type": "VARCHAR2",
-          "length": 100,
-          "nullable": false,
-          "has_default": false,
-          "is_auto_increment": false
-        },
-        {
-          "name": "email",
-          "source_type": "VARCHAR2",
-          "length": 150,
-          "nullable": false,
-          "has_default": false,
-          "is_auto_increment": false
-        },
-        {
-          "name": "join_date",
-          "source_type": "DATE",
-          "length": 7,
-          "nullable": false,
-          "has_default": true,
-          "is_auto_increment": false
-=======
-          "type": "NUMBER",
-          "length": 22,
-          "nullable": false,
-          "default": null
-        },
-        {
-          "name": "name",
           "type": "VARCHAR2",
           "length": 100,
           "nullable": false,
-          "default": null
+          "default": null,
+          "is_auto_increment": false
         },
         {
           "name": "email",
           "type": "VARCHAR2",
           "length": 150,
           "nullable": false,
-          "default": null
+          "default": null,
+          "is_auto_increment": false
         },
         {
           "name": "join_date",
           "type": "DATE",
           "length": 7,
-          "nullable": true,
-          "default": "SYSDATE"
->>>>>>> f33bb88c5c8a6f05471613a03b01a9213f0b607c
+          "nullable": false,
+          "default": "SYSDATE",
+          "is_auto_increment": false
         }
       ],
       "primary_key": [
@@ -78,86 +46,51 @@
       "columns": [
         {
           "name": "id",
-<<<<<<< HEAD
-          "source_type": "NUMBER",
+          "type": "NUMBER",
           "length": 22,
           "nullable": false,
-          "has_default": true,
+          "default": "\"SYSTEM\".\"ISEQ$$_75860\".nextval",
           "is_auto_increment": true
         },
         {
           "name": "title",
-          "source_type": "VARCHAR2",
+          "type": "VARCHAR2",
           "length": 200,
           "nullable": false,
-          "has_default": false,
+          "default": null,
           "is_auto_increment": false
         },
         {
           "name": "author",
-          "source_type": "VARCHAR2",
+          "type": "VARCHAR2",
           "length": 150,
           "nullable": false,
-          "has_default": false,
+          "default": null,
           "is_auto_increment": false
         },
         {
           "name": "isbn",
-          "source_type": "VARCHAR2",
+          "type": "VARCHAR2",
           "length": 20,
           "nullable": false,
-          "has_default": false,
+          "default": null,
           "is_auto_increment": false
         },
         {
           "name": "total_copies",
-          "source_type": "NUMBER",
+          "type": "NUMBER",
           "length": 22,
           "nullable": false,
-          "has_default": false,
+          "default": null,
           "is_auto_increment": false
         },
         {
           "name": "available_copies",
-          "source_type": "NUMBER",
+          "type": "NUMBER",
           "length": 22,
           "nullable": false,
-          "has_default": false,
+          "default": null,
           "is_auto_increment": false
-=======
-          "type": "NUMBER",
-          "length": 22,
-          "nullable": false,
-          "default": null
-        },
-        {
-          "name": "title",
-          "type": "VARCHAR2",
-          "length": 200,
-          "nullable": false,
-          "default": null
-        },
-        {
-          "name": "author",
-          "type": "VARCHAR2",
-          "length": 150,
-          "nullable": true,
-          "default": null
-        },
-        {
-          "name": "isbn",
-          "type": "VARCHAR2",
-          "length": 20,
-          "nullable": true,
-          "default": null
-        },
-        {
-          "name": "available",
-          "type": "NUMBER",
-          "length": 22,
-          "nullable": true,
-          "default": "1  -- 1 = available, 0 = checked out"
->>>>>>> f33bb88c5c8a6f05471613a03b01a9213f0b607c
         }
       ],
       "primary_key": [
@@ -170,86 +103,51 @@
       "columns": [
         {
           "name": "id",
-<<<<<<< HEAD
-          "source_type": "NUMBER",
+          "type": "NUMBER",
           "length": 22,
           "nullable": false,
-          "has_default": true,
+          "default": "\"SYSTEM\".\"ISEQ$$_75864\".nextval",
           "is_auto_increment": true
         },
         {
           "name": "member_id",
-          "source_type": "NUMBER",
+          "type": "NUMBER",
           "length": 22,
           "nullable": false,
-          "has_default": false,
+          "default": null,
           "is_auto_increment": false
         },
         {
           "name": "book_id",
-          "source_type": "NUMBER",
+          "type": "NUMBER",
           "length": 22,
           "nullable": false,
-          "has_default": false,
+          "default": null,
           "is_auto_increment": false
         },
         {
           "name": "loan_date",
-          "source_type": "DATE",
+          "type": "DATE",
           "length": 7,
           "nullable": false,
-          "has_default": true,
+          "default": "SYSDATE",
           "is_auto_increment": false
         },
         {
           "name": "due_date",
-          "source_type": "DATE",
-          "length": 7,
-          "nullable": false,
-          "has_default": false,
-          "is_auto_increment": false
-        },
-        {
-          "name": "return_date",
-          "source_type": "DATE",
-          "length": 7,
-          "nullable": true,
-          "has_default": false,
-          "is_auto_increment": false
-=======
-          "type": "NUMBER",
-          "length": 22,
-          "nullable": false,
-          "default": null
-        },
-        {
-          "name": "member_id",
-          "type": "NUMBER",
-          "length": 22,
-          "nullable": false,
-          "default": null
-        },
-        {
-          "name": "book_id",
-          "type": "NUMBER",
-          "length": 22,
-          "nullable": false,
-          "default": null
-        },
-        {
-          "name": "loan_date",
           "type": "DATE",
           "length": 7,
-          "nullable": true,
-          "default": "SYSDATE"
+          "nullable": false,
+          "default": null,
+          "is_auto_increment": false
         },
         {
           "name": "return_date",
           "type": "DATE",
           "length": 7,
           "nullable": true,
-          "default": null
->>>>>>> f33bb88c5c8a6f05471613a03b01a9213f0b607c
+          "default": null,
+          "is_auto_increment": false
         }
       ],
       "primary_key": [
