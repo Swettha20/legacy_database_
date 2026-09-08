@@ -1,35 +1,26 @@
 """
-legacy-db-modernizer: Day 4-5
+legacy-db-modernizer: Day 4-5 (updated after Day 6 caught a real bug)
 Rule-based Oracle -> PostgreSQL type mapping.
 
-Deliberately NOT using AI here - type mapping for the common cases is a
-solved, deterministic problem. A lookup table is faster, cheaper, and more
-reliable than an AI call for these. AI is reserved for genuinely ambiguous
-cases (flagged below with "needs_review" confidence) - same principle as
-the detector being rule-based in the earlier ai-code-migrator project.
-
-Every mapping decision gets a confidence level, feeding directly into the
-project's confidence/flagging report:
-    "high"         - unambiguous, safe to auto-apply
-    "needs_review" - a reasonable default was chosen, but a human should
-                      confirm (e.g. a bare NUMBER with no precision/scale)
+UPDATE: originally, any bare Oracle NUMBER column was mapped to NUMERIC
+with a "needs_review" flag - including foreign key columns. Day 6 (writing
+the schema into real Postgres) surfaced a real failure: Postgres refuses a
+foreign key between a NUMERIC column and an INTEGER column (SERIAL primary
+keys are INTEGER under the hood), even though the values would fit. Fixed
+by first resolving the type of every primary key, then checking - for each
+foreign key column - what type its referenced column actually resolved to,
+and matching it exactly. This is now a "high" confidence decision, not a
+guess, because it's inferable from data already in the IR.
 """
 
 import json
 
 
 def map_column_type(column: dict) -> dict:
-    """
-    Takes one column dict from the IR and returns a dict with the
-    PostgreSQL type decision, confidence, and a human-readable note
-    explaining the decision.
-    """
     source_type = column["type"]
     length = column["length"]
     is_auto_increment = column["is_auto_increment"]
 
-    # Auto-increment columns become SERIAL regardless of their Oracle type -
-    # this takes priority over the normal type mapping below.
     if is_auto_increment:
         return {
             "pg_type": "SERIAL",
@@ -53,10 +44,6 @@ def map_column_type(column: dict) -> dict:
         }
 
     if source_type == "NUMBER":
-        # A bare NUMBER with no precision/scale info is genuinely ambiguous -
-        # it could be an integer or hold decimals. We pick a safe default
-        # (NUMERIC, which can hold both) but flag it for human review rather
-        # than silently guessing.
         return {
             "pg_type": "NUMERIC",
             "confidence": "needs_review",
@@ -65,7 +52,6 @@ def map_column_type(column: dict) -> dict:
                     "but please confirm this is the intended type",
         }
 
-    # Anything we don't have a rule for yet
     return {
         "pg_type": None,
         "confidence": "manual_action_needed",
@@ -74,13 +60,50 @@ def map_column_type(column: dict) -> dict:
 
 
 def map_schema(ir: dict) -> dict:
-    """
-    Applies map_column_type() to every column in every table, returning
-    a new structure with the mapping decisions attached - the original
-    IR is left untouched.
-    """
     mapped = {"tables": []}
 
+    # --- Pass 1: map every table's columns with the base rules, and
+    # remember what type each table's PRIMARY KEY column resolved to.
+    # We need this before Pass 2, since a foreign key's correct type
+    # depends on knowing its target table's primary key type already.
+    primary_key_types = {}  # table_name -> {column_name: pg_type}
+
+    table_mappings = {}
+    for table in ir["tables"]:
+        column_map = {}
+        for col in table["columns"]:
+            column_map[col["name"]] = map_column_type(col)
+        table_mappings[table["name"]] = column_map
+
+        primary_key_types[table["name"]] = {
+            pk: column_map[pk]["pg_type"] for pk in table["primary_key"]
+        }
+
+    # --- Pass 2: for every foreign key, override the generic mapping
+    # with the exact type of the column it references - this is what
+    # fixes the SERIAL/INTEGER vs NUMERIC mismatch Day 6 hit.
+    for table in ir["tables"]:
+        for fk in table["foreign_keys"]:
+            ref_table = fk["references_table"]
+            ref_col = fk["references_column"]
+            ref_type = primary_key_types.get(ref_table, {}).get(ref_col)
+
+            if ref_type:
+                # SERIAL is INTEGER under the hood - a foreign key can't
+                # be SERIAL itself (that would create its own sequence,
+                # which is wrong for a column that should just hold a
+                # copy of another table's id), so we use INTEGER here.
+                fk_pg_type = "INTEGER" if ref_type == "SERIAL" else ref_type
+
+                table_mappings[table["name"]][fk["column"]] = {
+                    "pg_type": fk_pg_type,
+                    "confidence": "high",
+                    "note": f"Foreign key referencing {ref_table}.{ref_col} "
+                            f"({ref_type}) - matched to {fk_pg_type} so the "
+                            f"foreign key constraint is valid in Postgres",
+                }
+
+    # --- Assemble final output ---
     for table in ir["tables"]:
         mapped_table = {
             "name": table["name"],
@@ -88,27 +111,20 @@ def map_schema(ir: dict) -> dict:
             "foreign_keys": table["foreign_keys"],
             "columns": [],
         }
-
         for col in table["columns"]:
-            mapping = map_column_type(col)
+            mapping = table_mappings[table["name"]][col["name"]]
             mapped_table["columns"].append({
                 "name": col["name"],
                 "source_type": col["type"],
                 "nullable": col["nullable"],
                 **mapping,
             })
-
         mapped["tables"].append(mapped_table)
 
     return mapped
 
 
 def print_confidence_report(mapped: dict):
-    """
-    A human-readable summary of every mapping decision, grouped by
-    confidence level - this is the actual "confidence/flagging report"
-    the project architecture promised.
-    """
     for table in mapped["tables"]:
         print(f"\n=== {table['name']} ===")
         for col in table["columns"]:
@@ -126,7 +142,6 @@ if __name__ == "__main__":
         ir = json.load(f)
 
     mapped = map_schema(ir)
-
     print_confidence_report(mapped)
 
     with open("mapped_schema.json", "w") as f:

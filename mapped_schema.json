@@ -128,17 +128,17 @@
           "name": "member_id",
           "source_type": "NUMBER",
           "nullable": false,
-          "pg_type": "NUMERIC",
-          "confidence": "needs_review",
-          "note": "Oracle NUMBER has no fixed precision/scale visible here - defaulted to NUMERIC (safe for both integers and decimals), but please confirm this is the intended type"
+          "pg_type": "INTEGER",
+          "confidence": "high",
+          "note": "Foreign key referencing members.id (SERIAL) - matched to INTEGER so the foreign key constraint is valid in Postgres"
         },
         {
           "name": "book_id",
           "source_type": "NUMBER",
           "nullable": false,
-          "pg_type": "NUMERIC",
-          "confidence": "needs_review",
-          "note": "Oracle NUMBER has no fixed precision/scale visible here - defaulted to NUMERIC (safe for both integers and decimals), but please confirm this is the intended type"
+          "pg_type": "INTEGER",
+          "confidence": "high",
+          "note": "Foreign key referencing books.id (SERIAL) - matched to INTEGER so the foreign key constraint is valid in Postgres"
         },
         {
           "name": "loan_date",
