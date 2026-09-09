@@ -64,17 +64,26 @@ def write_schema_to_postgres(mapped_schema: dict, connection):
     print("\nAll tables created successfully in PostgreSQL.")
 
 
-if __name__ == "__main__":
-    with open("mapped_schema.json") as f:
-        mapped_schema = json.load(f)
-
-    connection = psycopg2.connect(
+def get_pg_connection_for_api():
+    """
+    A reusable connection function, separate from the __main__ block below,
+    so api.py (Day 9) can import and call this directly instead of
+    duplicating connection code.
+    """
+    return psycopg2.connect(
         host="localhost",
         port=5432,
         user="postgres",
         password="YourPgPassword123",  # match your docker run password
         dbname="modernized_db"
     )
+
+
+if __name__ == "__main__":
+    with open("mapped_schema.json") as f:
+        mapped_schema = json.load(f)
+
+    connection = get_pg_connection_for_api()
 
     write_schema_to_postgres(mapped_schema, connection)
     connection.close()

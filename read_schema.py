@@ -1,5 +1,5 @@
 """
-legacy-db-modernizer: Day 2
+legacy-db-modernizer: Day 2 (fixed after Day 9 caught a real bug)
 Connects to the Oracle sample schema and reads its metadata:
 tables -> columns (name, type, length, nullable, default) -> primary/foreign keys.
 
@@ -7,23 +7,36 @@ This is READ-ONLY. It doesn't build the IR yet (that's Day 3) -
 it just proves we can pull structured metadata out of Oracle reliably,
 and prints it in a readable form so we can eyeball it's correct
 before we start transforming it.
+
+FIX (Day 9): the Oracle connection used to be created at the TOP LEVEL of
+this file (outside any function). That meant simply IMPORTING this file -
+which api.py does - tried to connect to Oracle immediately, even before
+anyone called /migrate/start. If Oracle wasn't running yet, the whole API
+crashed on startup instead of just failing the one migration attempt that
+actually needed it. Fixed by moving the connection inside read_schema()
+so it only connects when the function is actually called.
 """
 
 import oracledb
-
-# Same connection details as test_connection.py -- keep these in one
-# place once we wrap this in FastAPI (Day 9); for now, duplicated is fine.
-connection = oracledb.connect(
-    user="system",
-    password="YourPassword123",
-    dsn="localhost:1521/XEPDB1"
-)
 
 # We only care about the tables *we* created, not Oracle's own SYSTEM
 # tables (there are hundreds of those). List them explicitly for now;
 # Day 3+ can switch this to "every table owned by a given app schema"
 # once we're not sharing the SYSTEM user for our own tables.
 OUR_TABLES = ["MEMBERS", "BOOKS", "LOANS"]
+
+
+def get_oracle_connection():
+    """
+    Creates a fresh Oracle connection on demand, rather than at import
+    time. Callers (read_schema(), or the __main__ block below) each get
+    their own connection and are responsible for closing it.
+    """
+    return oracledb.connect(
+        user="system",
+        password="YourPassword123",  # match your Oracle container password
+        dsn="localhost:1521/XEPDB1",
+    )
 
 
 def get_columns(cursor, table_name):
@@ -99,17 +112,26 @@ def get_foreign_keys(cursor, table_name):
 
 
 def read_schema():
+    """
+    Opens its own Oracle connection, reads all OUR_TABLES' metadata,
+    then closes the connection before returning - so callers (like
+    api.py) don't need to manage the connection lifecycle themselves.
+    """
+    connection = get_oracle_connection()
     cursor = connection.cursor()
     schema = {}
 
-    for table_name in OUR_TABLES:
-        schema[table_name] = {
-            "columns": get_columns(cursor, table_name),
-            "primary_key": get_primary_key(cursor, table_name),
-            "foreign_keys": get_foreign_keys(cursor, table_name),
-        }
+    try:
+        for table_name in OUR_TABLES:
+            schema[table_name] = {
+                "columns": get_columns(cursor, table_name),
+                "primary_key": get_primary_key(cursor, table_name),
+                "foreign_keys": get_foreign_keys(cursor, table_name),
+            }
+    finally:
+        cursor.close()
+        connection.close()
 
-    cursor.close()
     return schema
 
 
@@ -133,4 +155,3 @@ def print_schema(schema):
 if __name__ == "__main__":
     schema = read_schema()
     print_schema(schema)
-    connection.close()
