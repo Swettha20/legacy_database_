@@ -1,76 +1,58 @@
-import sys
-import os
+"""
+legacy-db-modernizer: Day 10
+A simple Streamlit UI that calls the FastAPI backend (Day 9) to trigger
+a migration and poll its status - rather than running the pipeline
+functions directly. This keeps the UI as just one possible "client" of
+the API, the same way a future real frontend or another script could be.
+"""
 
-# Make app/ importable so we can pull in detector.py and registry.py directly
-sys.path.append(os.path.join(os.path.dirname(__file__), 'app'))
-
+import time
+import requests
 import streamlit as st
-from detector import detect_file_type
-from registry import PluginRegistry
 
-st.set_page_config(page_title="AI Code Migrator", page_icon="🔄", layout="wide")
+API_BASE_URL = "http://localhost:8000"
 
-st.title("🔄 AI Code Migrator")
-st.caption("Upload a legacy file. We'll detect what it is and offer a plugin to modernize it — powered by a local AI model.")
+st.set_page_config(page_title="Legacy DB Modernizer", page_icon="🗄️")
+st.title("🗄️ Legacy DB Modernizer")
+st.caption("Oracle → PostgreSQL migration, powered by a local pipeline + AI-assisted review.")
 
-registry = PluginRegistry()
+if "job_id" not in st.session_state:
+    st.session_state["job_id"] = None
 
-uploaded_file = st.file_uploader(
-    "Upload a legacy file",
-    type=["java", "php", "sql", "txt"],
-    help="Java, PHP, SQL, or even a .txt file — detection is based on content, not extension."
-)
+st.write("This runs the full pipeline: read Oracle schema → build IR → "
+         "map types → write Postgres schema → migrate data.")
 
-if uploaded_file is not None:
-    content = uploaded_file.read().decode("utf-8")
+if st.button("🚀 Start Migration", type="primary"):
+    try:
+        response = requests.post(f"{API_BASE_URL}/migrate/start")
+        response.raise_for_status()
+        st.session_state["job_id"] = response.json()["job_id"]
+        st.success(f"Migration started. Job ID: {st.session_state['job_id']}")
+    except requests.exceptions.ConnectionError:
+        st.error("Couldn't reach the API. Is `uvicorn api:app --reload` running?")
 
-    with st.expander("📄 View uploaded file content", expanded=False):
-        st.code(content, language=None)
+if st.session_state["job_id"]:
+    status_placeholder = st.empty()
+    job_id = st.session_state["job_id"]
 
-    detected_type = detect_file_type(content)
+    # Poll the status endpoint every second until the job finishes or fails.
+    # This is a simple loop, not a background thread - fine for a demo/local
+    # tool where the migration finishes in seconds; a production UI would
+    # use something more sophisticated (e.g. auto-refresh on a timer).
+    while True:
+        response = requests.get(f"{API_BASE_URL}/migrate/status/{job_id}")
+        data = response.json()
+        status = data.get("status", "unknown")
 
-    if detected_type == "unknown":
-        st.error(f"Couldn't detect a supported file type for **{uploaded_file.name}**. Supported types: Java, PHP, SQL.")
-    else:
-        st.success(f"Detected type: **{detected_type.upper()}**")
+        status_placeholder.info(f"Status: **{status}**")
 
-        matching_plugins = registry.get_plugins_for(detected_type)
+        if status == "completed":
+            status_placeholder.success(
+                f"✅ Migration completed at {data.get('completed_at')}"
+            )
+            break
+        elif status == "failed":
+            status_placeholder.error(f"❌ Migration failed: {data.get('error')}")
+            break
 
-        if not matching_plugins:
-            st.warning(f"No plugin currently handles '{detected_type}' files.")
-        else:
-            plugin_names = [p.name for p in matching_plugins]
-            selected_name = st.selectbox("Choose a conversion plugin:", plugin_names)
-            selected_plugin = next(p for p in matching_plugins if p.name == selected_name)
-
-            st.info(f"**{selected_plugin.source_type}** → **{selected_plugin.target_type}**")
-
-            if st.button("🚀 Convert", type="primary"):
-                with st.spinner(f"Running {selected_plugin.name}... this may take a minute (local AI model)"):
-                    try:
-                        result = selected_plugin.convert(content)
-                        st.session_state["conversion_result"] = result
-                        st.session_state["target_type"] = selected_plugin.target_type
-                    except Exception as e:
-                        st.error(f"Conversion failed: {e}")
-
-            if "conversion_result" in st.session_state:
-                st.subheader("✅ Converted Output")
-                st.code(st.session_state["conversion_result"], language=None)
-
-                extension_map = {
-                    "python": "py",
-                    "node": "js",
-                    "postgresql": "sql",
-                }
-                out_ext = extension_map.get(st.session_state["target_type"], "txt")
-                out_filename = f"converted.{out_ext}"
-
-                st.download_button(
-                    "⬇️ Download converted file",
-                    data=st.session_state["conversion_result"],
-                    file_name=out_filename,
-                    mime="text/plain"
-                )
-else:
-    st.info("👆 Upload a file to get started.")
+        time.sleep(1)
