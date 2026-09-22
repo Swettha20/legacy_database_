@@ -1,22 +1,25 @@
 """
-legacy-db-modernizer: Day 4-5 (updated after Day 6 caught a real bug)
-Rule-based Oracle -> PostgreSQL type mapping.
+legacy-db-modernizer: Day 4-5, updated Day 9 (FK fix) and Day 11 (AI advisor)
+Rule-based Oracle -> PostgreSQL type mapping, with an AI-assisted fallback
+for genuinely ambiguous cases.
 
-UPDATE: originally, any bare Oracle NUMBER column was mapped to NUMERIC
-with a "needs_review" flag - including foreign key columns. Day 6 (writing
-the schema into real Postgres) surfaced a real failure: Postgres refuses a
-foreign key between a NUMERIC column and an INTEGER column (SERIAL primary
-keys are INTEGER under the hood), even though the values would fit. Fixed
-by first resolving the type of every primary key, then checking - for each
-foreign key column - what type its referenced column actually resolved to,
-and matching it exactly. This is now a "high" confidence decision, not a
-guess, because it's inferable from data already in the IR.
+History of fixes, kept here since each one taught something real:
+- Day 6 surfaced a bug: foreign keys got the generic ambiguous NUMBER
+  treatment even when they referenced a SERIAL primary key, causing a
+  Postgres DatatypeMismatch error. Fixed with a two-pass approach: map
+  primary keys first, then match foreign keys to their referenced type.
+- Day 11: for remaining ambiguous bare NUMBER columns (not foreign keys,
+  no inferable type), instead of defaulting straight to NUMERIC, ask the
+  local AI model for a more informed suggestion based on the column name,
+  validated against a fixed allowlist before being trusted. Confidence
+  stays "needs_review" either way - an AI guess is still a guess.
 """
 
 import json
+from ai_type_advisor import suggest_type_for_ambiguous_column
 
 
-def map_column_type(column: dict) -> dict:
+def map_column_type(table_name: str, column: dict) -> dict:
     source_type = column["type"]
     length = column["length"]
     is_auto_increment = column["is_auto_increment"]
@@ -44,13 +47,10 @@ def map_column_type(column: dict) -> dict:
         }
 
     if source_type == "NUMBER":
-        return {
-            "pg_type": "NUMERIC",
-            "confidence": "needs_review",
-            "note": "Oracle NUMBER has no fixed precision/scale visible here - "
-                    "defaulted to NUMERIC (safe for both integers and decimals), "
-                    "but please confirm this is the intended type",
-        }
+        # Ambiguous case - ask the AI advisor for a more informed guess
+        # than a blind NUMERIC default. Still flagged needs_review either way.
+        print(f"  Asking AI advisor for {table_name}.{column['name']}...")
+        return suggest_type_for_ambiguous_column(table_name, column["name"])
 
     return {
         "pg_type": None,
@@ -62,26 +62,26 @@ def map_column_type(column: dict) -> dict:
 def map_schema(ir: dict) -> dict:
     mapped = {"tables": []}
 
-    # --- Pass 1: map every table's columns with the base rules, and
-    # remember what type each table's PRIMARY KEY column resolved to.
-    # We need this before Pass 2, since a foreign key's correct type
-    # depends on knowing its target table's primary key type already.
-    primary_key_types = {}  # table_name -> {column_name: pg_type}
+    # --- Pass 1: map every table's columns with the base rules (including
+    # AI advisor calls for ambiguous cases), and remember what type each
+    # table's PRIMARY KEY column resolved to.
+    primary_key_types = {}
 
     table_mappings = {}
     for table in ir["tables"]:
         column_map = {}
         for col in table["columns"]:
-            column_map[col["name"]] = map_column_type(col)
+            column_map[col["name"]] = map_column_type(table["name"], col)
         table_mappings[table["name"]] = column_map
 
         primary_key_types[table["name"]] = {
             pk: column_map[pk]["pg_type"] for pk in table["primary_key"]
         }
 
-    # --- Pass 2: for every foreign key, override the generic mapping
-    # with the exact type of the column it references - this is what
-    # fixes the SERIAL/INTEGER vs NUMERIC mismatch Day 6 hit.
+    # --- Pass 2: for every foreign key, override with the exact type of
+    # the column it references - this takes priority over anything Pass 1
+    # decided (including an AI suggestion), since it's derivable with
+    # certainty from data already in the IR, not a guess.
     for table in ir["tables"]:
         for fk in table["foreign_keys"]:
             ref_table = fk["references_table"]
@@ -89,12 +89,7 @@ def map_schema(ir: dict) -> dict:
             ref_type = primary_key_types.get(ref_table, {}).get(ref_col)
 
             if ref_type:
-                # SERIAL is INTEGER under the hood - a foreign key can't
-                # be SERIAL itself (that would create its own sequence,
-                # which is wrong for a column that should just hold a
-                # copy of another table's id), so we use INTEGER here.
                 fk_pg_type = "INTEGER" if ref_type == "SERIAL" else ref_type
-
                 table_mappings[table["name"]][fk["column"]] = {
                     "pg_type": fk_pg_type,
                     "confidence": "high",

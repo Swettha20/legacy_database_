@@ -84,17 +84,17 @@
           "name": "total_copies",
           "source_type": "NUMBER",
           "nullable": false,
-          "pg_type": "NUMERIC",
+          "pg_type": "INTEGER",
           "confidence": "needs_review",
-          "note": "Oracle NUMBER has no fixed precision/scale visible here - defaulted to NUMERIC (safe for both integers and decimals), but please confirm this is the intended type"
+          "note": "AI-suggested type based on column name 'total_copies' (originally ambiguous bare NUMBER) - please confirm"
         },
         {
           "name": "available_copies",
           "source_type": "NUMBER",
           "nullable": false,
-          "pg_type": "NUMERIC",
+          "pg_type": "INTEGER",
           "confidence": "needs_review",
-          "note": "Oracle NUMBER has no fixed precision/scale visible here - defaulted to NUMERIC (safe for both integers and decimals), but please confirm this is the intended type"
+          "note": "AI-suggested type based on column name 'available_copies' (originally ambiguous bare NUMBER) - please confirm"
         }
       ]
     },
