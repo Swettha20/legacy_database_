@@ -1,0 +1,23 @@
+============================================================
+MIGRATION CONFIDENCE REPORT
+Generated: 2026-09-23T13:11:15.311058
+============================================================
+
+Total columns migrated: 16
+  High confidence (auto-migrated, safe):    14
+  Needs review (migrated, please confirm):  2
+  Manual action needed (not auto-migrated): 0
+
+------------------------------------------------------------
+ITEMS NEEDING REVIEW:
+------------------------------------------------------------
+
+  books.total_copies
+    NUMBER -> INTEGER
+    Reason: AI-suggested type based on column name 'total_copies' (originally ambiguous bare NUMBER) - please confirm
+
+  books.available_copies
+    NUMBER -> INTEGER
+    Reason: AI-suggested type based on column name 'available_copies' (originally ambiguous bare NUMBER) - please confirm
+
+============================================================
