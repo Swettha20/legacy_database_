@@ -68,11 +68,8 @@ def save_ir(ir: dict, path: str = "schema_ir.json"):
 
 
 if __name__ == "__main__":
-    from read_schema import connection  # reuse the same connection object
-
     schema = read_schema()
     ir = build_ir(schema)
 
     print(json.dumps(ir, indent=2))
     save_ir(ir)
-    connection.close()
