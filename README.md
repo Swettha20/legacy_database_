@@ -7,7 +7,7 @@ An AI-assisted tool that migrates a legacy **Oracle** database to a modern **Pos
 This tool does **not** claim to migrate databases "without any fault" or produce something "impossible to get wrong." No real system can honestly claim that. Instead, it:
 
 - Automates the confident, mechanical parts of migration with deterministic rules
-- Uses a local AI model (Ollama) only where genuine judgment is needed — ambiguous column types, and translating procedural logic
+- Uses an AI model only where genuine judgment is needed — ambiguous column types, and translating procedural logic. The model is swappable: a free local model (Ollama) by default, or Groq's free cloud API, chosen with one setting (see [Choosing the AI provider](#choosing-the-ai-provider))
 - **Validates every AI output** before accepting it, and retries with specific feedback when validation fails
 - **Transparently reports** what it's confident about versus what a human should review, via a standalone confidence report
 
@@ -46,7 +46,7 @@ and a Streamlit UI, so it runs end-to-end from a single button click.
 
 - **Docker** — runs Oracle XE and PostgreSQL locally, no native installs
 - **Python** — `oracledb` and `psycopg2` drivers, FastAPI, Streamlit
-- **Ollama (local AI, `codellama:7b`)** — free, private, no API key required
+- **AI provider (your choice, one setting)** — **Ollama** (`codellama:7b`, runs locally: free, private, no API key, no internet) or **Groq** (`openai/gpt-oss-120b`, free-tier cloud API: needs a free API key and internet, noticeably more reliable on the harder translation task)
 
 ## What's built and verified
 
@@ -54,6 +54,7 @@ and a Streamlit UI, so it runs end-to-end from a single button click.
 - Real data migration in batches, with ID sequences correctly reset to avoid collisions
 - AI-assisted type suggestions for ambiguous columns, validated against a fixed allowlist before being trusted
 - AI-powered PL/SQL → PL/pgSQL translation of a real stored procedure (`checkout_book`), including row locking, custom exceptions, and transaction handling — validated structurally, then confirmed by actually executing the translated function against a live database
+- Provider-switchable AI layer (`llm_provider.py`) with timeouts, retries, rate-limit handling and a safe fallback, so an unreachable AI service degrades one step instead of crashing the run
 - A standalone confidence/flagging report
 - A working REST API (FastAPI) and browser UI (Streamlit), with confirmed graceful failure handling when a database is unreachable
 
@@ -64,6 +65,8 @@ Worth stating plainly, since debugging real issues is the actual engineering wor
 1. **Foreign key type mismatch** — the type mapper initially mapped ambiguous `NUMBER` columns to `NUMERIC` even when they were foreign keys referencing `SERIAL` (effectively `INTEGER`) columns, causing Postgres to reject the foreign key constraint. Fixed with a two-pass mapping approach: resolve primary key types first, then match foreign keys to their referenced type exactly.
 2. **Eager connection at import time** — `read_schema.py` originally opened its Oracle connection at the top level of the file, meaning simply *importing* it (as the FastAPI backend does) tried to connect immediately, crashing the whole API on startup if Oracle wasn't ready. Fixed by moving the connection inside the function that actually needs it.
 3. **Invalid transaction control in translated PL/pgSQL** — the AI's first translation attempt included `COMMIT`/`ROLLBACK` inside the function body, which Oracle procedures allow but plain PL/pgSQL functions do not. This passed structural validation but failed at actual execution time. Fixed by updating the prompt to omit transaction control entirely (relying on Postgres's automatic rollback-on-exception behavior) and adding a validator check that catches this pattern going forward.
+4. **Translations that compile but behave differently** — checked against a real PostgreSQL, not assumed: Oracle's `SYSDATE` was translated to `CURRENT_DATE`, silently storing midnight instead of the real time (fixed: `NOW()`); and Oracle's `WHEN NO_DATA_FOUND` handler never fires in Postgres for a plain `SELECT ... INTO`, so a missing book produced a foreign-key error instead of the intended message (fixed: `INTO STRICT`). Both are now enforced in the prompt *and* caught by the validator, which retries with the specific error.
+5. **A hardcoded model name quietly retiring** — the cloud model first chosen was shut down by its provider, surfacing as a bare `404`. Fixed by making the model configurable, showing the provider's own error text, and adding `python llm_provider.py --models` to list what a key can currently use.
 
 ## Getting set up
 
@@ -84,10 +87,33 @@ docker pull postgres:16
 docker run -d --name pg-target -p 5432:5432 -e POSTGRES_PASSWORD=<your-password> -e POSTGRES_DB=modernized_db postgres:16
 ```
 
-Ollama must also be installed, with the model pulled:
+Copy `.env.example` to `.env` and fill in your database passwords (`.env` is gitignored — never commit it). Then pick an AI provider (below).
+
+### Choosing the AI provider
+
+Set `LLM_PROVIDER` in `.env`. If it is missing, the default is `ollama`.
+
+**Option 1 — Ollama (local, default).** Free, private, works offline. Install Ollama, then:
 ```powershell
 ollama pull codellama:7b
 ```
+```
+LLM_PROVIDER=ollama
+```
+
+**Option 2 — Groq (free-tier cloud API).** Create a free key at [console.groq.com](https://console.groq.com) (API Keys), then add to `.env`:
+```
+LLM_PROVIDER=groq
+GROQ_API_KEY=your_key_here
+GROQ_MODEL=openai/gpt-oss-120b
+```
+Check the setup with `python llm_provider.py` (prints the active provider and a test reply).
+
+Trade-offs, stated plainly:
+- **Groq sends prompts over the internet.** Here those are column names and stored-procedure text from the sample schema. Don't send confidential production code to any free cloud tier without reading its data terms.
+- **Free tiers have rate limits** and can change. The code waits briefly on a rate-limit response and otherwise falls back safely, but heavy use may need a paid plan.
+- **Cloud models get retired.** If calls fail with a 404 / `model_not_found`, run `python llm_provider.py --models` and set `GROQ_MODEL` to one that is listed.
+- **Ollama costs nothing and keeps data local**, but a 7B model on CPU is slower and less consistent — it needed retries on the PL/SQL translation where the larger model succeeded first time.
 
 **Note:** on restart, Docker containers do not start automatically — run `docker start oracle-xe pg-target` each time before working with this project.
 

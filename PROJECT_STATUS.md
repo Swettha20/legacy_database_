@@ -54,7 +54,7 @@ Confidence/Flagging Report:
 - **Python** — extractor / mapper / loader logic (`oracledb` driver for source)
 - **FastAPI** — lightweight backend (upload, run, status endpoints) — not built yet
 - **Streamlit** — UI, same tool used in the previous project — not built yet
-- **Ollama (local AI model)** — same free, local, no-API-key approach as the previous project; used only for ambiguous schema/type decisions and PL/SQL translation
+- **AI model (switchable)** — Ollama (local, free, no API key) by default, or Groq's free-tier cloud API via `LLM_PROVIDER` in `.env`; used only for ambiguous schema/type decisions and PL/SQL translation. See README → "Choosing the AI provider"
 
 **Deliberately deferred unless time remains:** Celery/Redis job queue, a full React dashboard, true GB-scale stress testing, additional database pairs. Document these as "designed for, not yet built" in the final writeup — don't build them under time pressure just to check a box.
 
