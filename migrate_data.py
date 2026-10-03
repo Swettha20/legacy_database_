@@ -11,7 +11,13 @@ migrating it (in the same transaction as the inserts, so a failure still
 rolls back cleanly). This makes the script a full, safe re-migration each
 time it's run - not an incremental/delta sync, which is a different,
 larger feature intentionally out of scope here.
+
+UPDATE (data guard): a fraction inserted into an INTEGER column is silently
+rounded by Postgres. Each batch is now checked against the real target
+column types before it is written; see check_whole_numbers().
 """
+
+import decimal
 
 import oracledb
 import psycopg2
@@ -49,6 +55,63 @@ def get_pg_connection():
     )
 
 
+class DataIntegrityError(RuntimeError):
+    """The source data cannot be loaded into the target column without
+    silently changing it. Raised BEFORE anything is written for that batch."""
+
+
+def get_integer_columns(pg_cursor, table_name: str) -> set:
+    """
+    Columns the TARGET database actually holds as whole-number types. Read
+    from Postgres itself (not from a JSON file), so it reflects exactly what
+    the values are about to be inserted into.
+    """
+    pg_cursor.execute(
+        """
+        SELECT column_name FROM information_schema.columns
+        WHERE table_schema = current_schema()
+          AND table_name = %s
+          AND data_type IN ('smallint', 'integer', 'bigint')
+        """,
+        (table_name,),
+    )
+    return {row[0] for row in pg_cursor.fetchall()}
+
+
+def _is_whole_number(value) -> bool:
+    if value is None or isinstance(value, int):
+        return True
+    if isinstance(value, float):
+        return value.is_integer()          # 3.0 is fine; 2.5, NaN, inf are not
+    if isinstance(value, decimal.Decimal):
+        return value == value.to_integral_value()
+    return True   # not numeric at all: let the database reject it, loudly
+
+
+def check_whole_numbers(table_name: str, columns: list, integer_columns: set, batch: list):
+    """
+    Postgres silently ROUNDS a fraction inserted into an INTEGER column
+    (2.5 is stored as 3, no error). That is data corruption that looks like
+    success, and it happens when a column's type was a guess (the AI advisor
+    picks it from the column NAME and never sees the data). So refuse to load
+    a fraction into a whole-number column and say exactly where it is.
+    """
+    checks = [(i, c) for i, c in enumerate(columns) if c in integer_columns]
+    if not checks:
+        return
+    id_index = columns.index("id") if "id" in columns else None
+    for row in batch:
+        for i, column in checks:
+            if not _is_whole_number(row[i]):
+                where = f" (row id {row[id_index]})" if id_index is not None else ""
+                raise DataIntegrityError(
+                    f"{table_name}.{column}: the source value {row[i]!r}{where} is not a "
+                    f"whole number, but the column is a whole-number type in Postgres. "
+                    f"Loading it would silently round it. Nothing was changed. "
+                    f"This column's type needs to be NUMERIC (or the source data corrected)."
+                )
+
+
 def truncate_tables(pg_cursor):
     for table_name in reversed(TABLES_IN_ORDER):
         pg_cursor.execute(f'TRUNCATE TABLE "{table_name}" RESTART IDENTITY CASCADE;')
@@ -61,11 +124,15 @@ def migrate_table(oracle_cursor, pg_cursor, table_name: str):
 
     oracle_cursor.execute(f"SELECT {oracle_column_list} FROM {table_name.upper()}")
 
+    integer_columns = get_integer_columns(pg_cursor, table_name)
+
     total_rows = 0
     while True:
         batch = oracle_cursor.fetchmany(BATCH_SIZE)
         if not batch:
             break
+
+        check_whole_numbers(table_name, columns, integer_columns, batch)
 
         placeholders = ", ".join(["%s"] * len(columns))
         column_list = ", ".join(f'"{c}"' for c in columns)
