@@ -89,6 +89,23 @@ docker run -d --name pg-target --restart unless-stopped -p 5432:5432 -e POSTGRES
 
 Copy `.env.example` to `.env` and fill in your database passwords (`.env` is gitignored — never commit it). Then pick an AI provider (below).
 
+### Performance and measuring migration speed
+
+Data is read from Oracle in batches of 5,000 rows and written with PostgreSQL `COPY` (falling back to a slower, driver-adapted insert for any value type it does not recognise). Each table's row count is checked against what was read before anything is committed, and a failure anywhere rolls the whole load back.
+
+Measured on a laptop-class machine against PostgreSQL 16 with synthetic data (Postgres side only, source rows generated in memory): the previous row-by-row insert managed about 10,600 rows/s; `COPY` manages about 78,000-88,000 rows/s with a primary key, a unique index and a foreign key in place, using roughly 66 MB of memory regardless of table size (batches are streamed). That is about a million rows in 13 seconds. **Your real speed depends on Oracle's read speed, the network and the disk**, which that test cannot see. To measure it end to end on your own machine:
+
+```powershell
+python seed_oracle_volume.py 300000          # ~300k customers + ~700k orders in scratch tables
+$env:ORACLE_TABLES = "VOL_CUSTOMERS,VOL_ORDERS"
+python build_ir.py; python type_mapper.py; python write_postgres_schema.py
+Measure-Command { python migrate_data.py }   # the number that matters
+Remove-Item Env:ORACLE_TABLES
+python seed_oracle_volume.py --drop          # remove the Oracle scratch tables
+```
+
+Not yet tested at hundreds of millions of rows, and the whole load runs as one transaction, so a very large migration needs enough disk for PostgreSQL's write-ahead log.
+
 ### Choosing what to migrate
 
 By default the tool migrates every table owned by the user you connect as (`ORACLE_USER`), discovering them automatically and ordering them so parent tables are created and loaded before the tables that reference them. Two optional settings in `.env`:
