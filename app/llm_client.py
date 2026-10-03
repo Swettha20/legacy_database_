@@ -1,25 +1,22 @@
-import requests
+import os
+import sys
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "codellama:7b"
+# The shared provider layer lives in the project root; app/ is run from
+# several places (tests, plugins), so add the root to the path explicitly.
+# append (not insert) so nothing in app/ can be shadowed by root modules.
+sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+
+from llm_provider import ask_llm  # noqa: E402
 
 
 def ask_ollama(prompt: str) -> str:
     """
-    Sends a prompt to the local Ollama server and returns the model's
-    full text response as a single string.
+    Kept under its original name so the plugins (java_to_python,
+    php_to_node, sql_to_postgres) work unchanged. It now goes through the
+    shared provider layer, so despite the name it uses whichever provider
+    LLM_PROVIDER selects in .env (Ollama by default, or Groq).
     """
-    response = requests.post(
-        OLLAMA_URL,
-        json={
-            "model": MODEL_NAME,
-            "prompt": prompt,
-            "stream": False,
-        },
-    )
-    response.raise_for_status()
-    data = response.json()
-    return data["response"]
+    return ask_llm(prompt)
 
 
 def clean_code_output(raw_output: str) -> str:

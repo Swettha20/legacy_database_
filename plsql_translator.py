@@ -1,7 +1,7 @@
 """
 legacy-db-modernizer: Day 12
 Translates Oracle PL/SQL stored procedures into PostgreSQL PL/pgSQL,
-using the local AI model - then VALIDATES the result structurally and
+using the configured AI model (Ollama or Groq) - then VALIDATES the result structurally and
 retries with specific feedback if it fails, same pattern as the PHP
 plugin's SQL-injection check and the Java plugin's ast.parse() check
 from the earlier ai-code-migrator project.
@@ -32,19 +32,8 @@ History of fixes:
 """
 
 import re
-import requests
 
-OLLAMA_URL = "http://localhost:11434/api/generate"
-MODEL_NAME = "codellama:7b"
-
-
-def ask_ollama(prompt: str) -> str:
-    response = requests.post(
-        OLLAMA_URL,
-        json={"model": MODEL_NAME, "prompt": prompt, "stream": False},
-    )
-    response.raise_for_status()
-    return response.json()["response"]
+from llm_provider import ask_llm, provider_name
 
 
 def clean_code_output(raw_output: str) -> str:
@@ -145,8 +134,8 @@ def build_prompt(plsql_code: str, retry: bool = False, error: str = "") -> str:
 
 
 def translate_procedure(plsql_code: str) -> str:
-    print("  [translate] Calling Ollama (attempt 1)...")
-    raw_output = ask_ollama(build_prompt(plsql_code, retry=False))
+    print(f"  [translate] Calling {provider_name()} (attempt 1)...")
+    raw_output = ask_llm(build_prompt(plsql_code, retry=False))
     cleaned = clean_code_output(raw_output)
 
     is_valid, error = is_structurally_valid_plpgsql(cleaned)
@@ -155,7 +144,7 @@ def translate_procedure(plsql_code: str) -> str:
         return cleaned
 
     print(f"  [translate] Attempt 1 invalid ({error}), retrying...")
-    raw_retry = ask_ollama(build_prompt(plsql_code, retry=True, error=error))
+    raw_retry = ask_llm(build_prompt(plsql_code, retry=True, error=error))
     cleaned_retry = clean_code_output(raw_retry)
 
     is_valid_retry, error_retry = is_structurally_valid_plpgsql(cleaned_retry)
