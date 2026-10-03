@@ -82,9 +82,9 @@ Docker must be installed and running:
 
 ```powershell
 docker pull gvenzl/oracle-xe:latest
-docker run -d --name oracle-xe -p 1521:1521 -e ORACLE_PASSWORD=<your-password> gvenzl/oracle-xe:latest
+docker run -d --name oracle-xe --restart unless-stopped -p 1521:1521 -e ORACLE_PASSWORD=<your-password> gvenzl/oracle-xe:latest
 docker pull postgres:16
-docker run -d --name pg-target -p 5432:5432 -e POSTGRES_PASSWORD=<your-password> -e POSTGRES_DB=modernized_db postgres:16
+docker run -d --name pg-target --restart unless-stopped -p 5432:5432 -e POSTGRES_PASSWORD=<your-password> -e POSTGRES_DB=modernized_db postgres:16
 ```
 
 Copy `.env.example` to `.env` and fill in your database passwords (`.env` is gitignored — never commit it). Then pick an AI provider (below).
@@ -115,7 +115,7 @@ Trade-offs, stated plainly:
 - **Cloud models get retired.** If calls fail with a 404 / `model_not_found`, run `python llm_provider.py --models` and set `GROQ_MODEL` to one that is listed.
 - **Ollama costs nothing and keeps data local**, but a 7B model on CPU is slower and less consistent — it needed retries on the PL/SQL translation where the larger model succeeded first time.
 
-**Note:** on restart, Docker containers do not start automatically — run `docker start oracle-xe pg-target` each time before working with this project.
+**Note on restarts:** the `--restart unless-stopped` flag above makes Docker bring both containers back up whenever Docker itself starts (for Docker Desktop, enable *Start Docker Desktop when you sign in*). If you created the containers earlier without it, add it with `docker update --restart unless-stopped oracle-xe pg-target`. Oracle takes a minute or more to accept connections after a cold start, so `.\start_services.ps1` is still useful: it starts the containers if needed and waits until Oracle genuinely accepts a connection. A container you stopped by hand with `docker stop` stays stopped until you start it again.
 
 Load the sample schema (`sample_schema.sql`) against the Oracle container, using SYSTEM or a SQL client of your choice.
 
