@@ -45,7 +45,7 @@ def get_oracle_connection():
 def get_columns(cursor, table_name):
     cursor.execute(
         """
-        SELECT column_name, data_type, data_length, nullable, data_default
+        SELECT column_name, data_type, data_length, data_precision, data_scale, nullable, data_default
         FROM all_tab_columns
         WHERE table_name = :table_name
           AND owner = 'SYSTEM'
@@ -54,11 +54,13 @@ def get_columns(cursor, table_name):
         table_name=table_name,
     )
     columns = []
-    for col_name, data_type, data_length, nullable, default in cursor.fetchall():
+    for col_name, data_type, data_length, precision, scale, nullable, default in cursor.fetchall():
         columns.append({
             "name": col_name,
             "type": data_type,
             "length": data_length,
+            "precision": precision,   # NULL for bare NUMBER and non-numeric types
+            "scale": scale,
             "nullable": nullable == "Y",
             "default": default.strip() if default else None,
         })
@@ -195,7 +197,10 @@ def print_schema(schema):
         for col in details["columns"]:
             nullable = "NULL" if col["nullable"] else "NOT NULL"
             default = f" DEFAULT {col['default']}" if col["default"] else ""
-            print(f"  - {col['name']}: {col['type']}({col['length']}) {nullable}{default}")
+            declared = ""
+            if col.get("precision") is not None or col.get("scale") is not None:
+                declared = f" [precision={col.get('precision')}, scale={col.get('scale')}]"
+            print(f"  - {col['name']}: {col['type']}({col['length']}){declared} {nullable}{default}")
 
         if details["foreign_keys"]:
             print("Foreign keys:")

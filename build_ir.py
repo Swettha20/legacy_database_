@@ -27,6 +27,8 @@ def build_table_ir(table_name, details):
                 "name": col["name"].lower(),
                 "type": col["type"],          # raw source type - Day 4-5 maps this
                 "length": col["length"],
+                "precision": col.get("precision"),   # declared NUMBER(p,s); None = bare NUMBER
+                "scale": col.get("scale"),
                 "nullable": col["nullable"],
                 "default": col["default"],    # raw default expression, kept as-is
                 "is_auto_increment": bool(

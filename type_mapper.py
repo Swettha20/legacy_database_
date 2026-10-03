@@ -20,12 +20,66 @@ from ai_type_advisor import suggest_type_for_ambiguous_column
 from constraints import translate_default, translate_check
 
 
+def map_declared_number(precision, scale):
+    """
+    Deterministic mapping for a NUMBER that DECLARES its precision/scale.
+    Returns a mapping dict, or None for a bare NUMBER (no precision, no
+    scale) - the only case that genuinely needs the AI advisor.
+
+    Before this, every NUMBER was treated as bare, so NUMBER(10,2) was sent
+    to the AI as if nothing were known about it, and could come back as
+    INTEGER (silently rounding prices).
+    """
+    if precision is None and scale is None:
+        return None                                   # bare NUMBER
+
+    if scale is None:
+        scale = 0     # NUMBER(p) means scale 0
+
+    declared = f"NUMBER({precision if precision is not None else '*'},{scale})"
+
+    if scale is not None and scale < 0:
+        return {
+            "pg_type": "NUMERIC",
+            "confidence": "needs_review",
+            "note": f"Declared {declared} rounds to tens/hundreds, which has no direct "
+                    f"Postgres equivalent - mapped to unconstrained NUMERIC, please confirm",
+        }
+
+    if scale == 0:
+        if precision is None:                         # NUMBER(*,0): any whole number up to 38 digits
+            return {"pg_type": "NUMERIC(38)", "confidence": "high",
+                    "note": f"Declared {declared}: whole numbers of up to 38 digits - NUMERIC(38) holds them all"}
+        if precision <= 9:
+            pg, why = "INTEGER", "fits a 32-bit INTEGER (up to 9 digits)"
+        elif precision <= 18:
+            pg, why = "BIGINT", "fits a 64-bit BIGINT (up to 18 digits)"
+        else:
+            pg, why = f"NUMERIC({precision})", "too many digits for BIGINT, so exact NUMERIC"
+        return {"pg_type": pg, "confidence": "high",
+                "note": f"Declared NUMBER({precision}) is whole-number-only and {why}"}
+
+    # scale > 0
+    p = precision if precision is not None else 38
+    return {"pg_type": f"NUMERIC({p},{scale})", "confidence": "high",
+            "note": f"Declared {declared} maps to NUMERIC({p},{scale}) - same precision and scale"}
+
+
 def map_column_type(table_name: str, column: dict) -> dict:
     source_type = column["type"]
     length = column["length"]
     is_auto_increment = column["is_auto_increment"]
 
     if is_auto_increment:
+        # A 32-bit SERIAL overflows past ~2.1 billion; if the Oracle column
+        # DECLARES more than 9 digits, a 64-bit BIGSERIAL is required.
+        if (column.get("precision") or 0) > 9:
+            return {
+                "pg_type": "BIGSERIAL",
+                "confidence": "high",
+                "note": f"Auto-increment column declared NUMBER({column['precision']}) "
+                        f"- needs 64-bit BIGSERIAL, not SERIAL",
+            }
         return {
             "pg_type": "SERIAL",
             "confidence": "high",
@@ -48,7 +102,10 @@ def map_column_type(table_name: str, column: dict) -> dict:
         }
 
     if source_type == "NUMBER":
-        # Ambiguous case - ask the AI advisor for a more informed guess
+        declared = map_declared_number(column.get("precision"), column.get("scale"))
+        if declared is not None:
+            return declared
+        # Ambiguous case (bare NUMBER, nothing declared) - ask the AI advisor for a more informed guess
         # than a blind NUMERIC default. Still flagged needs_review either way.
         print(f"  Asking AI advisor for {table_name}.{column['name']}...")
         return suggest_type_for_ambiguous_column(table_name, column["name"])
@@ -90,7 +147,7 @@ def map_schema(ir: dict) -> dict:
             ref_type = primary_key_types.get(ref_table, {}).get(ref_col)
 
             if ref_type:
-                fk_pg_type = "INTEGER" if ref_type == "SERIAL" else ref_type
+                fk_pg_type = {"SERIAL": "INTEGER", "BIGSERIAL": "BIGINT"}.get(ref_type, ref_type)
                 table_mappings[table["name"]][fk["column"]] = {
                     "pg_type": fk_pg_type,
                     "confidence": "high",
