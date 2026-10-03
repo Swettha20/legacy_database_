@@ -1,10 +1,12 @@
 import oracledb
 
-# These match what we used when starting the Docker container
+from config import ORACLE_USER, ORACLE_PASSWORD, ORACLE_DSN
+
+# Connection details come from .env (see .env.example), not from this file
 connection = oracledb.connect(
-    user="system",
-    password="YourPassword123",
-    dsn="localhost:1521/XEPDB1"
+    user=ORACLE_USER,
+    password=ORACLE_PASSWORD,
+    dsn=ORACLE_DSN,
 )
 
 print("Connected successfully!")

@@ -1,11 +1,13 @@
 import psycopg2
 
+from config import PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DBNAME
+
 connection = psycopg2.connect(
-    host="localhost",
-    port=5432,
-    user="postgres",
-    password="YourPgPassword123",
-    dbname="modernized_db"
+    host=PG_HOST,
+    port=PG_PORT,
+    user=PG_USER,
+    password=PG_PASSWORD,
+    dbname=PG_DBNAME,
 )
 
 print("Connected to PostgreSQL successfully!")

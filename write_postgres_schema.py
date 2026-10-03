@@ -11,6 +11,8 @@ is to prove the full path end to end: Oracle schema -> IR -> type mapping
 import json
 import psycopg2
 
+from config import PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DBNAME
+
 
 def build_create_table_sql(table: dict) -> str:
     """
@@ -71,11 +73,11 @@ def get_pg_connection_for_api():
     duplicating connection code.
     """
     return psycopg2.connect(
-        host="localhost",
-        port=5432,
-        user="postgres",
-        password="YourPgPassword123",  # match your docker run password
-        dbname="modernized_db"
+        host=PG_HOST,
+        port=PG_PORT,
+        user=PG_USER,
+        password=PG_PASSWORD,
+        dbname=PG_DBNAME,
     )
 
 

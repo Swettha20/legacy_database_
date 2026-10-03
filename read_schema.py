@@ -19,6 +19,8 @@ so it only connects when the function is actually called.
 
 import oracledb
 
+from config import ORACLE_USER, ORACLE_PASSWORD, ORACLE_DSN
+
 # We only care about the tables *we* created, not Oracle's own SYSTEM
 # tables (there are hundreds of those). List them explicitly for now;
 # Day 3+ can switch this to "every table owned by a given app schema"
@@ -33,9 +35,9 @@ def get_oracle_connection():
     their own connection and are responsible for closing it.
     """
     return oracledb.connect(
-        user="system",
-        password="YourPassword123",  # match your Oracle container password
-        dsn="localhost:1521/XEPDB1",
+        user=ORACLE_USER,
+        password=ORACLE_PASSWORD,
+        dsn=ORACLE_DSN,
     )
 
 
