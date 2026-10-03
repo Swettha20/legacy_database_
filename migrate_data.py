@@ -1,29 +1,27 @@
 """
-legacy-db-modernizer: Day 7-8
+legacy-db-modernizer: Day 7-8 (updated: config.py, then: re-run safety)
 Reads real row data out of Oracle in small batches and inserts it into
-the matching PostgreSQL tables created on Day 6.
+the matching PostgreSQL tables.
 
-Batches, not load-the-whole-table: even though our sample data is tiny,
-this proves the pattern that would let the same code handle a real,
-much larger table without changes - fetch a batch, write it, discard it,
-fetch the next batch. Memory use stays flat regardless of table size.
-
-ID handling: both members.id and books.id use Oracle's GENERATED ALWAYS
-AS IDENTITY, and the Postgres side uses SERIAL - two independent
-sequences. To keep foreign key relationships valid (loans.member_id ->
-members.id), we explicitly copy the SOURCE ids across rather than
-letting Postgres generate new ones, then reset Postgres's sequence
-afterward so future inserts (Day 9+ onward) don't collide with the
-copied ids.
+UPDATE (re-run safety): running this twice used to crash partway through
+with a confusing UniqueViolation error, because it always tried to INSERT
+rows with the original source ids - the second run collided with data
+from the first. Fixed by TRUNCATEing each target table immediately before
+migrating it (in the same transaction as the inserts, so a failure still
+rolls back cleanly). This makes the script a full, safe re-migration each
+time it's run - not an incremental/delta sync, which is a different,
+larger feature intentionally out of scope here.
 """
 
 import oracledb
 import psycopg2
+from config import (
+    ORACLE_USER, ORACLE_PASSWORD, ORACLE_DSN,
+    PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DBNAME,
+)
 
 BATCH_SIZE = 500
 
-# Order matters: migrate parent tables (members, books) before the
-# child table (loans) that references them via foreign keys.
 TABLES_IN_ORDER = ["members", "books", "loans"]
 
 TABLE_COLUMNS = {
@@ -35,20 +33,26 @@ TABLE_COLUMNS = {
 
 def get_oracle_connection():
     return oracledb.connect(
-        user="system",
-        password="YourPassword123",  # match your Oracle container password
-        dsn="localhost:1521/XEPDB1",
+        user=ORACLE_USER,
+        password=ORACLE_PASSWORD,
+        dsn=ORACLE_DSN,
     )
 
 
 def get_pg_connection():
     return psycopg2.connect(
-        host="localhost",
-        port=5432,
-        user="postgres",
-        password="YourPgPassword123",  # match your Postgres container password
-        dbname="modernized_db",
+        host=PG_HOST,
+        port=PG_PORT,
+        user=PG_USER,
+        password=PG_PASSWORD,
+        dbname=PG_DBNAME,
     )
+
+
+def truncate_tables(pg_cursor):
+    for table_name in reversed(TABLES_IN_ORDER):
+        pg_cursor.execute(f'TRUNCATE TABLE "{table_name}" RESTART IDENTITY CASCADE;')
+    print("  Existing data cleared from all target tables (safe for re-running).")
 
 
 def migrate_table(oracle_cursor, pg_cursor, table_name: str):
@@ -78,13 +82,6 @@ def migrate_table(oracle_cursor, pg_cursor, table_name: str):
 
 
 def reset_pg_sequence(pg_cursor, table_name: str):
-    """
-    After explicitly inserting our own id values, Postgres's SERIAL
-    sequence doesn't know about them yet - it would try to hand out
-    id=1 again on the next auto-generated insert, colliding with data
-    we just wrote. This advances the sequence to match the highest id
-    actually present in the table.
-    """
     pg_cursor.execute(f"""
         SELECT setval(
             pg_get_serial_sequence('"{table_name}"', 'id'),
@@ -101,13 +98,14 @@ def migrate_all_data():
     pg_cursor = pg_conn.cursor()
 
     try:
+        truncate_tables(pg_cursor)
+
         for table_name in TABLES_IN_ORDER:
             print(f"\n--- Migrating {table_name} ---")
             migrate_table(oracle_cursor, pg_cursor, table_name)
 
         pg_conn.commit()
 
-        # Reset sequences only after all data is committed
         for table_name in TABLES_IN_ORDER:
             reset_pg_sequence(pg_cursor, table_name)
         pg_conn.commit()
