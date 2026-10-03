@@ -89,6 +89,17 @@ docker run -d --name pg-target --restart unless-stopped -p 5432:5432 -e POSTGRES
 
 Copy `.env.example` to `.env` and fill in your database passwords (`.env` is gitignored — never commit it). Then pick an AI provider (below).
 
+### Choosing what to migrate
+
+By default the tool migrates every table owned by the user you connect as (`ORACLE_USER`), discovering them automatically and ordering them so parent tables are created and loaded before the tables that reference them. Two optional settings in `.env`:
+
+```
+ORACLE_SCHEMA=APP                    # migrate a different schema than the login user
+ORACLE_TABLES=MEMBERS,BOOKS,LOANS    # or list the tables explicitly
+```
+
+Stated plainly: a schema with more than 200 discoverable tables is refused (set `ORACLE_TABLES` to choose), circular foreign keys between tables are refused with a clear message, and a table's unsupported column types are skipped and reported rather than failing the run. A table that references *itself* (employee → manager) is supported.
+
 ### Choosing the AI provider
 
 Set `LLM_PROVIDER` in `.env`. If it is missing, the default is `ollama`.

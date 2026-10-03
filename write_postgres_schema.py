@@ -54,9 +54,15 @@ def build_create_table_sql(table: dict) -> str:
         column_lines.append(f"    {name}CHECK ({cc['pg_condition']})")
 
     for fk in table["foreign_keys"]:
+        # A table that references ITSELF (employee -> manager) cannot always
+        # be loaded in an order that satisfies the key row by row, so that
+        # constraint is DEFERRABLE (checked at commit by the data loader).
+        # INITIALLY IMMEDIATE keeps normal behaviour everywhere else.
+        deferrable = (" DEFERRABLE INITIALLY IMMEDIATE"
+                      if fk["references_table"] == table["name"] else "")
         column_lines.append(
             f'    FOREIGN KEY ("{fk["column"]}") '
-            f'REFERENCES "{fk["references_table"]}"("{fk["references_column"]}")'
+            f'REFERENCES "{fk["references_table"]}"("{fk["references_column"]}"){deferrable}'
         )
 
     columns_sql = ",\n".join(column_lines)

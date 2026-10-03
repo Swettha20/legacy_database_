@@ -19,14 +19,65 @@ so it only connects when the function is actually called.
 
 import oracledb
 
-from config import ORACLE_USER, ORACLE_PASSWORD, ORACLE_DSN
+from config import ORACLE_USER, ORACLE_PASSWORD, ORACLE_DSN, ORACLE_SCHEMA, ORACLE_TABLES
 from constraints import is_not_null_check
 
-# We only care about the tables *we* created, not Oracle's own SYSTEM
-# tables (there are hundreds of those). List them explicitly for now;
-# Day 3+ can switch this to "every table owned by a given app schema"
-# once we're not sharing the SYSTEM user for our own tables.
-OUR_TABLES = ["MEMBERS", "BOOKS", "LOANS"]
+# Safety valve for automatic table discovery. A normal application schema has
+# a handful to a few hundred tables; a schema like SYSTEM that also holds
+# Oracle's own tables must not be migrated wholesale by accident.
+MAX_AUTO_DISCOVERED_TABLES = 200
+
+
+class SchemaReadError(RuntimeError):
+    """The Oracle schema could not be read as configured."""
+
+
+def discover_tables(cursor):
+    """
+    Every table owned by ORACLE_SCHEMA that was created by a user, not by
+    Oracle's own install scripts (oracle_maintained = 'N'), minus
+    recycle-bin and other system-internal leftovers.
+    """
+    try:
+        cursor.execute(
+            """
+            SELECT object_name
+            FROM all_objects
+            WHERE owner = :owner
+              AND object_type = 'TABLE'
+              AND oracle_maintained = 'N'
+              AND object_name NOT LIKE 'BIN$%'
+              AND object_name NOT LIKE 'DR$%'
+              AND object_name NOT LIKE 'MLOG$%'
+              AND object_name NOT LIKE 'RUPD$%'
+              AND object_name NOT LIKE 'SYS_IOT_OVER_%'
+              AND object_name NOT LIKE 'SYS_EXPORT_%'
+            ORDER BY object_name
+            """,
+            owner=ORACLE_SCHEMA,
+        )
+    except oracledb.DatabaseError as e:
+        raise SchemaReadError(
+            f"Could not discover tables in schema {ORACLE_SCHEMA} ({e}). "
+            f"Set ORACLE_TABLES in .env to list them explicitly, e.g. "
+            f"ORACLE_TABLES=MEMBERS,BOOKS,LOANS"
+        ) from e
+    return [row[0] for row in cursor.fetchall()]
+
+
+def get_table_names(cursor):
+    """The explicit ORACLE_TABLES list if set, otherwise discovery."""
+    if ORACLE_TABLES:
+        return list(ORACLE_TABLES)
+    tables = discover_tables(cursor)
+    if not tables:
+        raise SchemaReadError(f"No user tables found in schema {ORACLE_SCHEMA}.")
+    if len(tables) > MAX_AUTO_DISCOVERED_TABLES:
+        raise SchemaReadError(
+            f"Schema {ORACLE_SCHEMA} has {len(tables)} tables - too many to migrate "
+            f"by accident. Set ORACLE_TABLES in .env to choose which ones."
+        )
+    return tables
 
 
 def get_oracle_connection():
@@ -48,10 +99,11 @@ def get_columns(cursor, table_name):
         SELECT column_name, data_type, data_length, data_precision, data_scale, nullable, data_default
         FROM all_tab_columns
         WHERE table_name = :table_name
-          AND owner = 'SYSTEM'
+          AND owner = :owner
         ORDER BY column_id
         """,
         table_name=table_name,
+        owner=ORACLE_SCHEMA,
     )
     columns = []
     for col_name, data_type, data_length, precision, scale, nullable, default in cursor.fetchall():
@@ -76,11 +128,12 @@ def get_primary_key(cursor, table_name):
           ON ac.constraint_name = acc.constraint_name
          AND ac.owner = acc.owner
         WHERE ac.table_name = :table_name
-          AND ac.owner = 'SYSTEM'
+          AND ac.owner = :owner
           AND ac.constraint_type = 'P'
         ORDER BY acc.position
         """,
         table_name=table_name,
+        owner=ORACLE_SCHEMA,
     )
     return [row[0] for row in cursor.fetchall()]
 
@@ -101,10 +154,11 @@ def get_foreign_keys(cursor, table_name):
          AND r_ac.owner = r_acc.owner
          AND acc.position = r_acc.position
         WHERE ac.table_name = :table_name
-          AND ac.owner = 'SYSTEM'
+          AND ac.owner = :owner
           AND ac.constraint_type = 'R'
         """,
         table_name=table_name,
+        owner=ORACLE_SCHEMA,
     )
     foreign_keys = []
     for column, ref_table, ref_column in cursor.fetchall():
@@ -127,11 +181,12 @@ def get_unique_constraints(cursor, table_name):
           ON ac.constraint_name = acc.constraint_name
          AND ac.owner = acc.owner
         WHERE ac.table_name = :table_name
-          AND ac.owner = 'SYSTEM'
+          AND ac.owner = :owner
           AND ac.constraint_type = 'U'
         ORDER BY ac.constraint_name, acc.position
         """,
         table_name=table_name,
+        owner=ORACLE_SCHEMA,
     )
     grouped = {}
     for constraint_name, column_name in cursor.fetchall():
@@ -148,11 +203,12 @@ def get_check_constraints(cursor, table_name):
         SELECT constraint_name, search_condition
         FROM all_constraints
         WHERE table_name = :table_name
-          AND owner = 'SYSTEM'
+          AND owner = :owner
           AND constraint_type = 'C'
         ORDER BY constraint_name
         """,
         table_name=table_name,
+        owner=ORACLE_SCHEMA,
     )
     checks = []
     for constraint_name, condition in cursor.fetchall():
@@ -164,7 +220,7 @@ def get_check_constraints(cursor, table_name):
 
 def read_schema():
     """
-    Opens its own Oracle connection, reads all OUR_TABLES' metadata,
+    Opens its own Oracle connection, reads the metadata of every table to migrate,
     then closes the connection before returning - so callers (like
     api.py) don't need to manage the connection lifecycle themselves.
     """
@@ -173,9 +229,15 @@ def read_schema():
     schema = {}
 
     try:
-        for table_name in OUR_TABLES:
+        for table_name in get_table_names(cursor):
+            columns = get_columns(cursor, table_name)
+            if not columns:
+                raise SchemaReadError(
+                    f"Table {table_name} was not found in schema {ORACLE_SCHEMA} "
+                    f"(check ORACLE_SCHEMA / ORACLE_TABLES in .env)."
+                )
             schema[table_name] = {
-                "columns": get_columns(cursor, table_name),
+                "columns": columns,
                 "primary_key": get_primary_key(cursor, table_name),
                 "foreign_keys": get_foreign_keys(cursor, table_name),
                 "unique_constraints": get_unique_constraints(cursor, table_name),

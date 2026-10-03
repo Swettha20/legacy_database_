@@ -1,5 +1,5 @@
 """
-legacy-db-modernizer: Day 7-8 (updated: config.py, then: re-run safety)
+legacy-db-modernizer: Day 7-8 (updated: config.py, re-run safety, then: any schema)
 Reads real row data out of Oracle in small batches and inserts it into
 the matching PostgreSQL tables.
 
@@ -22,19 +22,25 @@ import decimal
 import oracledb
 import psycopg2
 from config import (
-    ORACLE_USER, ORACLE_PASSWORD, ORACLE_DSN,
+    ORACLE_USER, ORACLE_PASSWORD, ORACLE_DSN, ORACLE_SCHEMA,
     PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DBNAME,
 )
+from build_ir import build_ir
+from read_schema import read_schema
 
 BATCH_SIZE = 500
 
-TABLES_IN_ORDER = ["members", "books", "loans"]
 
-TABLE_COLUMNS = {
-    "members": ["id", "name", "email", "join_date"],
-    "books": ["id", "title", "author", "isbn", "total_copies", "available_copies"],
-    "loans": ["id", "member_id", "book_id", "loan_date", "due_date", "return_date"],
-}
+def get_migration_plan() -> list:
+    """
+    The tables to load, in an order where parents come before the children
+    that reference them, each with its column names. Derived from the live
+    Oracle schema (the same discovery and ordering the schema step uses), so
+    the loader can never disagree with the tables that were created.
+    """
+    ir = build_ir(read_schema())
+    return [{"name": t["name"], "columns": [c["name"] for c in t["columns"]]}
+            for t in ir["tables"]]
 
 
 def get_oracle_connection():
@@ -112,17 +118,35 @@ def check_whole_numbers(table_name: str, columns: list, integer_columns: set, ba
                 )
 
 
-def truncate_tables(pg_cursor):
-    for table_name in reversed(TABLES_IN_ORDER):
-        pg_cursor.execute(f'TRUNCATE TABLE "{table_name}" RESTART IDENTITY CASCADE;')
+def get_target_columns(pg_cursor, table_name: str) -> list:
+    pg_cursor.execute(
+        """
+        SELECT column_name FROM information_schema.columns
+        WHERE table_schema = current_schema() AND table_name = %s
+        ORDER BY ordinal_position
+        """,
+        (table_name,),
+    )
+    return [row[0] for row in pg_cursor.fetchall()]
+
+
+def truncate_tables(pg_cursor, table_names: list):
+    """
+    Clears exactly the tables about to be loaded, in one statement. No
+    CASCADE on purpose: if some OTHER table references these, Postgres
+    refuses (loudly) instead of silently wiping data we do not own.
+    """
+    names = ", ".join(f'"{t}"' for t in table_names)
+    pg_cursor.execute(f"TRUNCATE TABLE {names} RESTART IDENTITY;")
     print("  Existing data cleared from all target tables (safe for re-running).")
 
 
-def migrate_table(oracle_cursor, pg_cursor, table_name: str):
-    columns = TABLE_COLUMNS[table_name]
-    oracle_column_list = ", ".join(columns)
+def migrate_table(oracle_cursor, pg_cursor, table_name: str, columns: list):
+    oracle_column_list = ", ".join(f'"{c.upper()}"' for c in columns)
 
-    oracle_cursor.execute(f"SELECT {oracle_column_list} FROM {table_name.upper()}")
+    oracle_cursor.execute(
+        f'SELECT {oracle_column_list} FROM "{ORACLE_SCHEMA}"."{table_name.upper()}"'
+    )
 
     integer_columns = get_integer_columns(pg_cursor, table_name)
 
@@ -148,16 +172,35 @@ def migrate_table(oracle_cursor, pg_cursor, table_name: str):
     return total_rows
 
 
-def reset_pg_sequence(pg_cursor, table_name: str):
-    pg_cursor.execute(f"""
-        SELECT setval(
-            pg_get_serial_sequence('"{table_name}"', 'id'),
-            COALESCE((SELECT MAX(id) FROM "{table_name}"), 1)
+def reset_pg_sequences(pg_cursor, table_name: str, columns: list):
+    """
+    For every column of this table that owns a sequence (SERIAL), move the
+    sequence past the highest migrated value so the next normal INSERT does
+    not collide. Works for any table: no assumption that the column is
+    called "id", or that there is one at all. (Done AFTER the data commit:
+    sequence changes are not rolled back with a transaction, so setting them
+    inside it could leave a sequence out of step after a failed load.)
+    """
+    for column in columns:
+        pg_cursor.execute("SELECT pg_get_serial_sequence(%s, %s)", (f'"{table_name}"', column))
+        sequence = pg_cursor.fetchone()[0]
+        if not sequence:
+            continue
+        pg_cursor.execute(
+            f'''
+            SELECT setval(
+                %s,
+                GREATEST(COALESCE((SELECT MAX("{column}") FROM "{table_name}"), 0), 1),
+                EXISTS (SELECT 1 FROM "{table_name}")
+            )
+            ''',
+            (sequence,),
         )
-    """)
 
 
 def migrate_all_data():
+    plan = get_migration_plan()
+
     oracle_conn = get_oracle_connection()
     pg_conn = get_pg_connection()
 
@@ -165,16 +208,37 @@ def migrate_all_data():
     pg_cursor = pg_conn.cursor()
 
     try:
-        truncate_tables(pg_cursor)
+        # Work out, per table, which columns exist on BOTH sides. A column
+        # the schema step could not map (no type rule) is not in Postgres, so
+        # it is left out here and reported instead of failing the whole load.
+        loadable = []
+        for entry in plan:
+            target = get_target_columns(pg_cursor, entry["name"])
+            if not target:
+                raise RuntimeError(
+                    f"Table '{entry['name']}' does not exist in Postgres - "
+                    f"run the schema step before migrating data."
+                )
+            columns = [c for c in entry["columns"] if c in target]
+            for skipped in (c for c in entry["columns"] if c not in target):
+                print(f"  WARNING: {entry['name']}.{skipped} has no column in Postgres "
+                      f"(unmapped type) - its data is NOT migrated")
+            loadable.append((entry["name"], columns))
 
-        for table_name in TABLES_IN_ORDER:
+        truncate_tables(pg_cursor, [name for name, _ in loadable])
+
+        # Self-referencing keys are DEFERRABLE: check them once at commit,
+        # not row by row, so row order inside a table does not matter.
+        pg_cursor.execute("SET CONSTRAINTS ALL DEFERRED")
+
+        for table_name, columns in loadable:
             print(f"\n--- Migrating {table_name} ---")
-            migrate_table(oracle_cursor, pg_cursor, table_name)
+            migrate_table(oracle_cursor, pg_cursor, table_name, columns)
 
         pg_conn.commit()
 
-        for table_name in TABLES_IN_ORDER:
-            reset_pg_sequence(pg_cursor, table_name)
+        for table_name, columns in loadable:
+            reset_pg_sequences(pg_cursor, table_name, columns)
         pg_conn.commit()
 
         print("\nAll data migrated and sequences reset successfully.")
