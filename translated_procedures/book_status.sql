@@ -16,15 +16,15 @@ BEGIN
     FROM books
     WHERE id = p_book_id;
 
-    v_label := CASE
-                 WHEN v_avail = 0 THEN 'none left'
-                 WHEN v_avail = v_total THEN 'all in'
-                 ELSE 'some out'
-               END;
+    SELECT CASE
+               WHEN v_avail = 0 THEN 'none left'
+               WHEN v_avail = v_total THEN 'all in'
+               ELSE 'some out'
+           END
+    INTO STRICT v_label;
 
     RETURN v_title || ': ' || v_label || ' (' ||
-           ROUND(v_avail::numeric / v_total * 100) ||
-           '% available)';
+           ROUND(v_avail::numeric / v_total * 100) || '% available)';
 EXCEPTION
     WHEN NO_DATA_FOUND THEN
         RETURN 'unknown book ' || p_book_id;

@@ -115,6 +115,8 @@ python plsql_translator.py --file my_script.sql   # from a script instead of Ora
 python plsql_translator.py --install              # also create the clean ones in Postgres
 ```
 
+`--install` **replaces** any function of the same name already in Postgres (an Oracle procedure name is unique in its schema, so there is one Postgres function per name). Dropping the old one and creating the new one happen in a single transaction, so if the new one fails to create, the old one stays; if a view or other object depends on the old one, nothing is changed and you are told why.
+
 Each result is written to `translated_procedures/<name>.sql` with a header listing its status and any review notes. To try it on varied code first, `python load_sample_procedures.py` creates seven sample procedures in Oracle (loops, cursors, OUT parameters, dynamic SQL, error handling, and some constructs that cannot be translated).
 
 How a result is trusted, in order:

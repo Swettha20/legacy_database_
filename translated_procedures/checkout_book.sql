@@ -23,6 +23,7 @@ BEGIN
     UPDATE books
     SET available_copies = available_copies - 1
     WHERE id = p_book_id;
+
 EXCEPTION
     WHEN NO_DATA_FOUND THEN
         RAISE EXCEPTION 'No such book_id %', p_book_id;

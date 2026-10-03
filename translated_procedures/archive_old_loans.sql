@@ -9,13 +9,11 @@ CREATE OR REPLACE FUNCTION archive_old_loans(p_before DATE)
 RETURNS void AS $$
 DECLARE
     v_ids integer[];
-    v_cnt integer;
 BEGIN
-    SELECT array_agg(id) INTO STRICT v_ids
+    SELECT COALESCE(array_agg(id), ARRAY[]::integer[]) INTO STRICT v_ids
     FROM loans
     WHERE return_date < p_before;
 
-    v_cnt := COALESCE(cardinality(v_ids), 0);
-    RAISE NOTICE 'Would archive % loans', v_cnt;
+    RAISE NOTICE 'Would archive % loans', array_length(v_ids, 1);
 END;
 $$ LANGUAGE plpgsql;

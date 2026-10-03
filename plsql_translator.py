@@ -165,6 +165,74 @@ def is_structurally_valid_plpgsql(code: str, original_plsql: str = "") -> tuple[
     return True, ""
 
 
+_FUNCTION_NAME = re.compile(
+    r'CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:"?[\w$]+"?\s*\.\s*)?("?)([\w$]+)\1\s*\(', re.IGNORECASE)
+
+
+def _function_name(sql: str):
+    m = _FUNCTION_NAME.search(sql)
+    if not m:
+        return None
+    return m.group(2) if m.group(1) else m.group(2).lower()
+
+
+def _drop_existing_versions(cursor, sql: str) -> list:
+    """
+    Drops any earlier version of the function being created, by NAME.
+
+    CREATE OR REPLACE FUNCTION refuses to change a function's return type, so
+    a translation that returns a different type than the copy installed by an
+    earlier run was rejected ("cannot change return type of existing
+    function") even though the new code was fine - wasting AI attempts and
+    letting the OLD deployed signature steer the new translation. An Oracle
+    procedure/function name is unique within its schema, so there is exactly
+    one Postgres function per name and replacing by name is right. Only
+    ordinary functions in the current schema are touched, never ones that
+    belong to an extension. Run it inside a transaction: it is undone if the
+    new function then fails to create.
+    """
+    name = _function_name(sql)
+    if not name:
+        return []
+    cursor.execute(
+        """
+        SELECT p.oid::regprocedure::text
+        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = current_schema() AND p.proname = %s AND p.prokind = 'f'
+          AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e')
+        """,
+        (name,),
+    )
+    signatures = [row[0] for row in cursor.fetchall()]
+    for signature in signatures:
+        cursor.execute(f"DROP FUNCTION {signature}")
+    return signatures
+
+
+# What Postgres says is accurate but did not always get the AI to fix it (it
+# ignored "result type must be integer because of OUT parameters" twice in a
+# real run). Known messages get a one-line instruction appended.
+_POSTGRES_HINTS = [
+    (r"because of OUT parameters",
+     "A function with OUT parameters must NOT declare RETURNS void (or any other type): leave the RETURNS clause out entirely."),
+    (r"loop variable of loop over rows must be a record variable",
+     "A FOR loop over query rows needs a RECORD variable (declare r RECORD;) or a list of scalar variables matching the columns."),
+    (r"end label",
+     "Close the function body with a plain END; - no name after END."),
+    (r"unrecognized exception condition",
+     "Use Postgres condition names: unique_violation, division_by_zero, no_data_found, too_many_rows, invalid_text_representation, others."),
+    (r"type \"?\w+\"? does not exist",
+     "Use Postgres types only: INTEGER, NUMERIC, VARCHAR, TEXT, TIMESTAMP, BOOLEAN."),
+]
+
+
+def _with_hint(message: str) -> str:
+    for pattern, hint in _POSTGRES_HINTS:
+        if re.search(pattern, message, re.IGNORECASE):
+            return f"{message}. {hint}"
+    return message
+
+
 def check_in_postgres(sql: str):
     """
     Asks a real PostgreSQL to parse the function: CREATE FUNCTION runs inside a
@@ -184,11 +252,17 @@ def check_in_postgres(sql: str):
     try:
         cur = conn.cursor()
         cur.execute("SET LOCAL check_function_bodies = on")
+        cur.execute("SAVEPOINT before_drop")
+        try:
+            _drop_existing_versions(cur, sql)
+        except psycopg2.Error:
+            # Something depends on the old version (a view, say). Validate without dropping it.
+            cur.execute("ROLLBACK TO SAVEPOINT before_drop")
         cur.execute(sql)          # no parameters: a literal % in RAISE is not a placeholder here
         return True, ""
     except psycopg2.Error as e:
         message = (e.diag.message_primary if e.diag and e.diag.message_primary else str(e)).strip()
-        return False, f"Postgres rejected the function: {message}"
+        return False, f"Postgres rejected the function: {_with_hint(message)}"
     finally:
         conn.rollback()
         conn.close()
@@ -391,14 +465,21 @@ def _result_file_text(result: TranslationResult) -> str:
 
 
 def install_in_postgres(sql: str):
-    """Creates the function for real. Returns (True, "") or (False, reason)."""
+    """
+    Creates the function for real, replacing any earlier version of the same
+    name. Drop and create happen in ONE transaction, so if the new function
+    fails to create, the old one is still there. Returns (True, note) -
+    note says what was replaced - or (False, reason).
+    """
     import psycopg2
     from config import PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DBNAME
     conn = psycopg2.connect(host=PG_HOST, port=PG_PORT, user=PG_USER, password=PG_PASSWORD, dbname=PG_DBNAME)
     try:
-        conn.cursor().execute(sql)
+        cur = conn.cursor()
+        replaced = _drop_existing_versions(cur, sql)
+        cur.execute(sql)
         conn.commit()
-        return True, ""
+        return True, (f"replaced earlier version: {', '.join(replaced)}" if replaced else "")
     except psycopg2.Error as e:
         conn.rollback()
         return False, (e.diag.message_primary or str(e)).strip()
@@ -453,7 +534,7 @@ def main(argv=None) -> int:
 
         if args.install and result.ok and result.pg_checked and not result.manual:
             installed, why = install_in_postgres(result.sql)
-            print(f"  [install] {'created in Postgres' if installed else 'NOT created: ' + why}")
+            print(f"  [install] {'created in Postgres' + (' (' + why + ')' if why else '') if installed else 'NOT created: ' + why}")
 
     print("\n" + "=" * 64)
     print(f"Translated {len(results)} from {origin}  ->  {out_dir}/")

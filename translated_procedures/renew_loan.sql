@@ -6,7 +6,7 @@
 CREATE OR REPLACE FUNCTION renew_loan(p_loan_id INTEGER, p_days INTEGER)
 RETURNS void AS $$
 DECLARE
-    v_rows INTEGER;
+    v_rowcount INTEGER;
 BEGIN
     IF p_days <= 0 OR p_days > 30 THEN
         RAISE EXCEPTION 'Renewal must be between 1 and 30 days, got %', p_days;
@@ -16,9 +16,9 @@ BEGIN
     SET due_date = due_date + p_days * INTERVAL '1 day'
     WHERE id = p_loan_id AND return_date IS NULL;
 
-    GET DIAGNOSTICS v_rows = ROW_COUNT;
+    GET DIAGNOSTICS v_rowcount = ROW_COUNT;
 
-    IF v_rows = 0 THEN
+    IF v_rowcount = 0 THEN
         RAISE EXCEPTION 'No open loan with id %', p_loan_id;
     END IF;
 END;
