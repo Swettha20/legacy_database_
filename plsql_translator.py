@@ -32,8 +32,41 @@ History of fixes:
 """
 
 import re
+import sys
+import time
 
-from llm_provider import ask_llm, provider_name
+import requests
+
+from llm_provider import ask_llm, provider_name, LLMConfigError
+
+AI_MAX_ATTEMPTS = 2
+AI_RETRY_DELAY_SECONDS = 3
+
+
+class TranslationUnavailable(RuntimeError):
+    """The AI provider could not be reached (after retries)."""
+
+
+def _ask_with_retry(prompt: str) -> str:
+    """
+    One transient failure (a network blip, a rate limit, a service still
+    starting) shouldn't fail the whole translation, but a service that is
+    really down must fail fast and clearly - not with a raw traceback.
+    Same retry pattern as ai_type_advisor.py.
+    """
+    last_error = None
+    for attempt in range(1, AI_MAX_ATTEMPTS + 1):
+        try:
+            return ask_llm(prompt)
+        except requests.exceptions.RequestException as e:
+            last_error = e
+            print(f"  [translate] AI call to {provider_name()} failed "
+                  f"(attempt {attempt}/{AI_MAX_ATTEMPTS}): {e}")
+            if attempt < AI_MAX_ATTEMPTS:
+                time.sleep(AI_RETRY_DELAY_SECONDS)
+    raise TranslationUnavailable(
+        f"{provider_name()} was unreachable after {AI_MAX_ATTEMPTS} attempts: {last_error}"
+    ) from last_error
 
 
 def clean_code_output(raw_output: str) -> str:
@@ -186,7 +219,7 @@ def build_prompt(plsql_code: str, retry: bool = False, error: str = "") -> str:
 
 def translate_procedure(plsql_code: str) -> str:
     print(f"  [translate] Calling {provider_name()} (attempt 1)...")
-    raw_output = ask_llm(build_prompt(plsql_code, retry=False))
+    raw_output = _ask_with_retry(build_prompt(plsql_code, retry=False))
     cleaned = clean_code_output(raw_output)
 
     is_valid, error = is_structurally_valid_plpgsql(cleaned, plsql_code)
@@ -195,7 +228,18 @@ def translate_procedure(plsql_code: str) -> str:
         return cleaned
 
     print(f"  [translate] Attempt 1 invalid ({error}), retrying...")
-    raw_retry = ask_llm(build_prompt(plsql_code, retry=True, error=error))
+    try:
+        raw_retry = _ask_with_retry(build_prompt(plsql_code, retry=True, error=error))
+    except TranslationUnavailable as e:
+        # The first attempt worked well enough to produce something; don't
+        # throw it away just because the AI went down before the retry.
+        print(f"  [translate] Retry could not run: {e}")
+        return (
+            "-- WARNING: This PL/pgSQL failed validation "
+            f"({error}) and the retry could not run\n"
+            f"-- because the AI service became unreachable ({provider_name()}).\n"
+            "-- It may be incomplete or malformed. Review manually, or run again.\n\n"
+        ) + cleaned
     cleaned_retry = clean_code_output(raw_retry)
 
     is_valid_retry, error_retry = is_structurally_valid_plpgsql(cleaned_retry, plsql_code)
@@ -228,7 +272,14 @@ if __name__ == "__main__":
     print("--- Original PL/SQL ---")
     print(plsql_code)
 
-    result = translate_procedure(plsql_code)
+    try:
+        result = translate_procedure(plsql_code)
+    except (TranslationUnavailable, LLMConfigError) as e:
+        # Exit cleanly WITHOUT touching checkout_book.plpgsql.sql, so an
+        # earlier good translation is never overwritten by a failed run.
+        print(f"\nERROR: translation did not run - {e}")
+        print("Existing checkout_book.plpgsql.sql (if any) was left unchanged.")
+        sys.exit(1)
 
     print("\n--- Translated PL/pgSQL ---")
     print(result)

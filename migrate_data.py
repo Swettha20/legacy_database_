@@ -113,7 +113,15 @@ def migrate_all_data():
         print("\nAll data migrated and sequences reset successfully.")
 
     except Exception:
-        pg_conn.rollback()
+        try:
+            pg_conn.rollback()
+        except Exception:
+            # The connection is already dead (database stopped or dropped us
+            # mid-load). Postgres discards an uncommitted transaction on its
+            # own, so nothing is lost - but a failing rollback() here used to
+            # replace the real error with "connection already closed".
+            # Swallow only the rollback failure; re-raise the ORIGINAL error.
+            pass
         raise
     finally:
         oracle_cursor.close()
