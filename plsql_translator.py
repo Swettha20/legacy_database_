@@ -1,5 +1,5 @@
 """
-legacy-db-modernizer: Day 12
+legacy-db-modernizer: Day 12 (generalised: any procedure or function)
 Translates Oracle PL/SQL stored procedures into PostgreSQL PL/pgSQL,
 using the configured AI model (Ollama or Groq) - then VALIDATES the result structurally and
 retries with specific feedback if it fails, same pattern as the PHP
@@ -29,18 +29,41 @@ History of fixes:
   check that specifically catches COMMIT/ROLLBACK inside the function body,
   since "structurally valid" alone didn't catch this class of bug - it
   only surfaces when you actually try to call the function.
+
+Generalised version: translates EVERY stored procedure and function in the
+Oracle schema (or in a script file), not one hardcoded sample. Each result is
+checked three ways before it is trusted - an Oracle-construct scan
+(plsql_rules.py, every replacement verified on a real PostgreSQL), a real
+PostgreSQL parse of the code (CREATE FUNCTION inside a transaction that is
+rolled back), and, if either finds a problem, the exact error is fed back to
+the AI for another attempt. What cannot be translated automatically is
+reported for a person instead of guessed, and behaviours that translate fine
+but differ between the databases are listed as review notes.
+
+    python plsql_translator.py                       # all procedures/functions in the Oracle schema
+    python plsql_translator.py --name CHECKOUT_BOOK  # just one
+    python plsql_translator.py --file my_script.sql  # from a script instead of Oracle
+    python plsql_translator.py --install             # also create the clean ones in Postgres
 """
 
+import argparse
 import re
 import sys
 import time
+from dataclasses import dataclass, field
+from pathlib import Path
 
 import requests
 
 from llm_provider import ask_llm, provider_name, LLMConfigError
+from plsql_rules import (
+    code_only, find_fix_problems, find_manual_constructs, find_advisories,
+    select_into_without_strict,
+)
 
-AI_MAX_ATTEMPTS = 2
+AI_MAX_ATTEMPTS = 2                 # per request, for transient network failures
 AI_RETRY_DELAY_SECONDS = 3
+MAX_TRANSLATION_ATTEMPTS = 3        # re-asks when the result is invalid
 
 
 class TranslationUnavailable(RuntimeError):
@@ -84,20 +107,15 @@ def clean_code_output(raw_output: str) -> str:
     return text
 
 
-def _code_only(code: str) -> str:
-    """Upper-cased code with string literals and -- comments blanked out, so
-    keyword checks don't trip on words inside messages like 'invalid number'."""
-    no_comments = re.sub(r"--[^\n]*", "", code)
-    return re.sub(r"'[^']*'", "''", no_comments).upper()
+# ------------------------------------------------------------- validation
 
 
 def is_structurally_valid_plpgsql(code: str, original_plsql: str = "") -> tuple[bool, str]:
     """
-    Structural checks, plus a few semantic checks for Oracle-to-Postgres
-    differences that compile fine but behave differently at runtime (each
-    one was verified against a real Postgres). Semantic checks that compare
-    against the source need original_plsql; without it they are skipped, so
-    existing callers keep working.
+    Structure checks, an Oracle-construct scan, and (when the original
+    source is given) checks that compare against it. Returns (ok, problems),
+    where problems lists EVERYTHING found so the AI can fix it in one go.
+    Callers that pass no original keep working: the comparisons are skipped.
     """
     code_upper = code.upper()
 
@@ -110,8 +128,8 @@ def is_structurally_valid_plpgsql(code: str, original_plsql: str = "") -> tuple[
     if "LANGUAGE PLPGSQL" not in code_upper and "LANGUAGE 'PLPGSQL'" not in code_upper:
         return False, "Missing LANGUAGE plpgsql declaration at the end of the function"
 
-    begin_count = len(re.findall(r'\bBEGIN\b', code_upper))
-    end_count = len(re.findall(r'\bEND\b', code_upper))
+    begin_count = len(re.findall(r"\bBEGIN\b", code_upper))
+    end_count = len(re.findall(r"\bEND\b", code_upper))
     if begin_count == 0:
         return False, "No BEGIN block found"
     if end_count < begin_count:
@@ -119,63 +137,85 @@ def is_structurally_valid_plpgsql(code: str, original_plsql: str = "") -> tuple[
 
     if re.search(r"RAISE EXCEPTION\s+'-\d+", code_upper):
         return False, ("RAISE EXCEPTION contains a malformed Oracle-style error code "
-                        "inside the string - should be RAISE EXCEPTION 'message', "
-                        "with the message properly formatted using %, not Oracle's || concatenation")
+                       "inside the string - should be RAISE EXCEPTION 'message', "
+                       "with the message properly formatted using %, not Oracle's || concatenation")
 
-    # Catches the real bug found by actually calling the translated
-    # function: a plain PL/pgSQL FUNCTION cannot COMMIT or ROLLBACK - it
-    # runs inside the caller's transaction. This only surfaces at call
-    # time otherwise, not at CREATE FUNCTION time, so it's worth catching
-    # here structurally instead of relying on someone testing a live call.
-    if re.search(r'\bCOMMIT\s*;', code_upper) or re.search(r'\bROLLBACK\s*;', code_upper):
-        return False, ("Function body contains COMMIT or ROLLBACK - not allowed inside a "
-                        "plain PL/pgSQL FUNCTION (only in a PROCEDURE called via CALL). "
-                        "Remove them entirely; Postgres automatically rolls back a "
-                        "function's changes when it raises an exception.")
-
-    body = _code_only(code)
+    problems = find_fix_problems(code)
     original_upper = original_plsql.upper()
+    body = code_only(code)
 
-    # Oracle type names left behind (a 7B model did this: v_available NUMBER).
-    if re.search(r"\b(NUMBER|VARCHAR2|NVARCHAR2)\b", body):
-        return False, ("Oracle-only type name (NUMBER / VARCHAR2) left in the code - "
-                        "use INTEGER, NUMERIC or VARCHAR instead")
+    if original_plsql:
+        # CURRENT_DATE silently drops the time of day (stores midnight), while
+        # Oracle's SYSDATE includes the time. Matches the type mapper, which maps
+        # Oracle DATE to TIMESTAMP for exactly this reason.
+        if "SYSDATE" in original_upper and re.search(r"\bCURRENT_DATE\b", body):
+            problems.append("CURRENT_DATE drops the time of day, but Oracle's SYSDATE includes "
+                            "it - use NOW() (e.g. NOW() + INTERVAL '14 days')")
 
-    if re.search(r"\bSYSDATE\b", body):
-        return False, "SYSDATE is Oracle-only - use NOW()"
+        # Verified on Postgres: a plain SELECT INTO returns NULL on zero rows and
+        # silently takes one row of several, where Oracle always raises. STRICT
+        # restores Oracle's behaviour (and makes WHEN NO_DATA_FOUND work at all).
+        if select_into_without_strict(code):
+            problems.append("a plain SELECT ... INTO does not raise NO_DATA_FOUND / TOO_MANY_ROWS "
+                            "the way Oracle does (Postgres silently returns NULL or the first row) - "
+                            "write every SELECT ... INTO as SELECT ... INTO STRICT variable")
 
-    # CURRENT_DATE silently drops the time of day (stores midnight), while
-    # Oracle's SYSDATE includes the time. Matches the type mapper, which maps
-    # Oracle DATE to TIMESTAMP for exactly this reason.
-    if "SYSDATE" in original_upper and re.search(r"\bCURRENT_DATE\b", body):
-        return False, ("CURRENT_DATE drops the time of day, but Oracle's SYSDATE includes "
-                        "it - use NOW() (e.g. NOW() + INTERVAL '14 days')")
-
-    # In Postgres, plain SELECT ... INTO never raises NO_DATA_FOUND (the
-    # variable just becomes NULL), so an Oracle NO_DATA_FOUND handler becomes
-    # dead code and the error message changes. INTO STRICT restores it.
-    if ("NO_DATA_FOUND" in original_upper and "NO_DATA_FOUND" in body
-            and not re.search(r"\bINTO\s+STRICT\b", body)):
-        return False, ("WHEN NO_DATA_FOUND never fires in Postgres unless the query uses "
-                        "SELECT ... INTO STRICT variable - add STRICT")
-
+    if problems:
+        return False, "; ".join(problems)
     return True, ""
 
 
+def check_in_postgres(sql: str):
+    """
+    Asks a real PostgreSQL to parse the function: CREATE FUNCTION runs inside a
+    transaction that is always rolled back, so nothing is created. This catches
+    what regexes cannot (syntax errors, unknown exception names, bad types,
+    wrong END labels - all verified). Returns (True, "") if it parses,
+    (False, reason) if Postgres rejects it, and (None, reason) if it could not
+    be checked at all (Postgres not running / not configured).
+    """
+    try:
+        import psycopg2
+        from config import PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DBNAME
+        conn = psycopg2.connect(host=PG_HOST, port=PG_PORT, user=PG_USER, password=PG_PASSWORD,
+                                dbname=PG_DBNAME, connect_timeout=5)
+    except Exception as e:
+        return None, f"Postgres syntax check skipped ({str(e).splitlines()[0][:100]})"
+    try:
+        cur = conn.cursor()
+        cur.execute("SET LOCAL check_function_bodies = on")
+        cur.execute(sql)          # no parameters: a literal % in RAISE is not a placeholder here
+        return True, ""
+    except psycopg2.Error as e:
+        message = (e.diag.message_primary if e.diag and e.diag.message_primary else str(e)).strip()
+        return False, f"Postgres rejected the function: {message}"
+    finally:
+        conn.rollback()
+        conn.close()
+
+
+# ----------------------------------------------------------------- prompt
+
+
 def build_prompt(plsql_code: str, retry: bool = False, error: str = "") -> str:
+    kind = "function" if re.match(r"\s*(CREATE\s+(OR\s+REPLACE\s+)?)?(EDITIONABLE\s+)?FUNCTION\b", plsql_code, re.I) else "procedure"
     base = (
-        "Convert the following Oracle PL/SQL stored procedure to a PostgreSQL "
+        f"Convert the following Oracle PL/SQL stored {kind} to a PostgreSQL "
         "PL/pgSQL function.\n\n"
         "REQUIRED, follow these exactly:\n\n"
         "1. Structure - use exactly this shape:\n"
         "   CREATE OR REPLACE FUNCTION function_name(params...)\n"
-        "   RETURNS void AS $$\n"
+        "   RETURNS <type> AS $$\n"
         "   DECLARE\n"
         "       ...variable declarations...\n"
         "   BEGIN\n"
         "       ...body...\n"
         "   END;\n"
         "   $$ LANGUAGE plpgsql;\n"
+        "   - An Oracle PROCEDURE without OUT parameters becomes RETURNS void.\n"
+        "   - An Oracle FUNCTION becomes RETURNS followed by its converted RETURN type.\n"
+        "   - OUT / IN OUT parameters become OUT / INOUT parameters in the parameter list.\n"
+        "   - Close with a plain END; (never END function_name;).\n"
         "   The LANGUAGE plpgsql; line at the very end, after the closing $$, is "
         "MANDATORY - the function is invalid without it.\n\n"
         "2. Error handling - Oracle's RAISE_APPLICATION_ERROR(-20001, 'some message') "
@@ -195,15 +235,34 @@ def build_prompt(plsql_code: str, retry: bool = False, error: str = "") -> str:
         "generic 'catch everything and re-throw' handler.\n\n"
         "5. Dates and times - Oracle's SYSDATE includes the time of day. Replace it "
         "with NOW(), NEVER with CURRENT_DATE (which drops the time). Date arithmetic "
-        "like SYSDATE + 14 (14 days) becomes NOW() + INTERVAL '14 days'.\n\n"
-        "6. NO_DATA_FOUND - in Postgres a plain SELECT ... INTO does NOT raise "
-        "NO_DATA_FOUND when no row matches, so an Oracle WHEN NO_DATA_FOUND handler "
-        "would never run. If the procedure has such a handler, write the query as "
-        "SELECT ... INTO STRICT variable ... so the handler works as in Oracle.\n\n"
-        "7. Types - never leave Oracle type names (NUMBER, VARCHAR2) in the output. "
-        "Use INTEGER for whole-number IDs, counts and parameters, NUMERIC for "
+        "like SYSDATE + 14 (14 days) becomes NOW() + INTERVAL '14 days'. "
+        "Adding a number to a date column or variable means DAYS in Oracle (due_date + p_days); "
+        "Postgres rejects timestamp + integer, so write due_date + p_days * INTERVAL '1 day'. "
+        "The difference of two dates is a number of days in Oracle; use (a::date - b::date). "
+        "TRUNC(date) becomes date_trunc('day', date). ADD_MONTHS(d, n) becomes "
+        "d + make_interval(months => n).\n\n"
+        "6. SELECT INTO - ALWAYS write SELECT ... INTO STRICT variable ... . Oracle "
+        "raises NO_DATA_FOUND when no row matches and TOO_MANY_ROWS when several do; "
+        "a plain SELECT ... INTO in Postgres silently returns NULL or just the first "
+        "row. STRICT restores Oracle's behavior and also makes a WHEN NO_DATA_FOUND "
+        "handler work. (Not for INSERT INTO ... SELECT or cursor FETCH ... INTO.)\n\n"
+        "7. Types - never leave Oracle type names (NUMBER, VARCHAR2, PLS_INTEGER) in the "
+        "output. Use INTEGER for whole-number IDs, counts and parameters, NUMERIC for "
         "decimals, and VARCHAR for text. Declare function parameters as plain types "
-        "(no IN keyword needed).\n\n"
+        "(no IN keyword needed). %TYPE and %ROWTYPE work as they are.\n\n"
+        "8. Oracle-only functions and syntax - replace them like this: NVL(a,b) -> "
+        "COALESCE(a,b); NVL2(a,b,c) -> CASE WHEN a IS NOT NULL THEN b ELSE c END; "
+        "DECODE(...) -> CASE; ROWNUM -> LIMIT; remove FROM DUAL; MINUS -> EXCEPT; "
+        "seq.NEXTVAL -> nextval('seq'); DBMS_OUTPUT.PUT_LINE(x) -> RAISE NOTICE '%', x; "
+        "EXECUTE IMMEDIATE -> EXECUTE; SQL%ROWCOUNT -> GET DIAGNOSTICS n = ROW_COUNT; "
+        "INSTR(s, sub) -> strpos(s, sub); explicit cursors: CURSOR c IS SELECT ... -> "
+        "c CURSOR FOR SELECT ...; exception names: DUP_VAL_ON_INDEX -> unique_violation, "
+        "ZERO_DIVIDE -> division_by_zero, INVALID_NUMBER -> invalid_text_representation. "
+        "NO_DATA_FOUND, TOO_MANY_ROWS and OTHERS are the same in both.\n\n"
+        "9. If part of the code CANNOT be translated (PRAGMA, BULK COLLECT, FORALL, "
+        "collection or record types, CONNECT BY, UTL_/DBMS_ packages), do not invent "
+        "something: translate everything else and leave a comment at that point "
+        "starting with -- MANUAL: describing what is missing.\n\n"
     )
     if retry:
         base += (
@@ -212,79 +271,198 @@ def build_prompt(plsql_code: str, retry: bool = False, error: str = "") -> str:
         )
     base += (
         "Return ONLY the PL/pgSQL code, no explanation, no markdown fences.\n\n"
-        f"Oracle PL/SQL procedure:\n{plsql_code}"
+        f"Oracle PL/SQL {kind}:\n{plsql_code}"
     )
     return base
 
 
-def translate_procedure(plsql_code: str) -> str:
-    print(f"  [translate] Calling {provider_name()} (attempt 1)...")
-    raw_output = _ask_with_retry(build_prompt(plsql_code, retry=False))
-    cleaned = clean_code_output(raw_output)
+# ------------------------------------------------------------ translation
 
-    is_valid, error = is_structurally_valid_plpgsql(cleaned, plsql_code)
-    if is_valid:
-        print("  [translate] Attempt 1 is structurally valid.")
-        return cleaned
 
-    print(f"  [translate] Attempt 1 invalid ({error}), retrying...")
-    try:
-        raw_retry = _ask_with_retry(build_prompt(plsql_code, retry=True, error=error))
-    except TranslationUnavailable as e:
-        # The first attempt worked well enough to produce something; don't
-        # throw it away just because the AI went down before the retry.
-        print(f"  [translate] Retry could not run: {e}")
+@dataclass
+class TranslationResult:
+    name: str
+    kind: str
+    sql: str                       # the code; starts with a WARNING header if it is not valid
+    ok: bool                       # passed every check
+    attempts: int
+    problems: list = field(default_factory=list)       # why it is not ok
+    manual: list = field(default_factory=list)         # parts a person must finish
+    advisories: list = field(default_factory=list)     # valid, but behaviour may differ
+    pg_checked: bool = False
+
+    @property
+    def needs_review(self) -> bool:
+        return (not self.ok) or bool(self.manual) or bool(self.advisories) or not self.pg_checked
+
+
+def _warning_header(problems: str, attempts: int, retry_failed_reason: str = "") -> str:
+    if retry_failed_reason:
         return (
-            "-- WARNING: This PL/pgSQL failed validation "
-            f"({error}) and the retry could not run\n"
-            f"-- because the AI service became unreachable ({provider_name()}).\n"
+            f"-- WARNING: This PL/pgSQL failed validation ({problems}) and the retry could not run\n"
+            f"-- because the AI service became unreachable ({retry_failed_reason}).\n"
             "-- It may be incomplete or malformed. Review manually, or run again.\n\n"
-        ) + cleaned
-    cleaned_retry = clean_code_output(raw_retry)
-
-    is_valid_retry, error_retry = is_structurally_valid_plpgsql(cleaned_retry, plsql_code)
-    if is_valid_retry:
-        print("  [translate] Retry is structurally valid.")
-        return cleaned_retry
-
-    print("  [translate] Still invalid after retry, returning with warning.")
-    warning = (
-        "-- WARNING: This PL/pgSQL failed validation even after a\n"
-        f"-- retry ({error_retry}). It may be incomplete or malformed.\n"
+        )
+    return (
+        f"-- WARNING: This PL/pgSQL failed validation even after {attempts} attempts\n"
+        f"-- ({problems}). It may be incomplete or malformed.\n"
         "-- Please review manually before running against a database.\n\n"
     )
-    return warning + cleaned_retry
+
+
+def _validate(code: str, original: str, check_postgres: bool):
+    """(ok, problem_text, pg_checked)"""
+    ok, problem = is_structurally_valid_plpgsql(code, original)
+    if not ok:
+        return False, problem, False
+    if not check_postgres:
+        return True, "", False
+    verdict, message = check_in_postgres(code)
+    if verdict is False:
+        return False, message, True
+    return True, "", verdict is True
+
+
+def translate_procedure_detailed(plsql_code: str, name: str = "", kind: str = "procedure",
+                                 check_postgres: bool = True) -> TranslationResult:
+    manual = find_manual_constructs(plsql_code)
+    advisories = find_advisories(plsql_code)
+
+    attempt, error, best = 0, "", None
+    while attempt < MAX_TRANSLATION_ATTEMPTS:
+        attempt += 1
+        label = "attempt 1" if attempt == 1 else f"retry {attempt - 1}"
+        print(f"  [translate] Calling {provider_name()} ({label})...")
+        try:
+            raw = _ask_with_retry(build_prompt(plsql_code, retry=attempt > 1, error=error))
+        except TranslationUnavailable as e:
+            if best is None:
+                raise
+            print(f"  [translate] Retry could not run: {e}")
+            return TranslationResult(name, kind, _warning_header(error, attempt, provider_name()) + best,
+                                     False, attempt - 1, [error], manual, advisories)
+        cleaned = clean_code_output(raw)
+        ok, problem, pg_checked = _validate(cleaned, plsql_code, check_postgres)
+        if ok:
+            print(f"  [translate] {'Attempt 1' if attempt == 1 else 'Retry'} is structurally valid"
+                  f"{' and accepted by Postgres' if pg_checked else ''}.")
+            return TranslationResult(name, kind, cleaned, True, attempt, [], manual, advisories, pg_checked)
+        print(f"  [translate] Attempt {attempt} invalid ({problem})"
+              f"{', retrying...' if attempt < MAX_TRANSLATION_ATTEMPTS else ''}")
+        best, error = cleaned, problem
+
+    print("  [translate] Still invalid after retry, returning with warning.")
+    return TranslationResult(name, kind, _warning_header(error, attempt) + best, False, attempt,
+                             [error], manual, advisories)
+
+
+def translate_procedure(plsql_code: str) -> str:
+    """Compatibility wrapper: just the code (with a WARNING header if invalid)."""
+    return translate_procedure_detailed(plsql_code).sql
+
+
+# ------------------------------------------------------- finding the code
+
+_OBJECT = re.compile(
+    r"CREATE\s+(?:OR\s+REPLACE\s+)?(?:(?:NON)?EDITIONABLE\s+)?(PROCEDURE|FUNCTION)\s+"
+    r"(?:\"?\w+\"?\s*\.\s*)?\"?([\w$#]+)\"?.*?^\s*/\s*$",
+    re.IGNORECASE | re.DOTALL | re.MULTILINE,
+)
+
+
+def split_plsql_script(text: str) -> list:
+    """Every CREATE PROCEDURE / FUNCTION in a SQL*Plus-style script (each ends
+    with a line containing only a slash). Anything else in the file - tables,
+    inserts - is ignored."""
+    return [{"name": m.group(2).upper(), "type": m.group(1).upper(),
+             "source": re.sub(r"\n\s*/\s*$", "", m.group(0).rstrip())}
+            for m in _OBJECT.finditer(text)]
+
+
+def _result_file_text(result: TranslationResult) -> str:
+    lines = [f"-- Translated from Oracle {result.kind.upper()} {result.name} by legacy-db-modernizer",
+             f"-- Status: {'OK' if result.ok else 'NEEDS FIXING - see WARNING below'}"
+             + ("" if result.pg_checked else "  (not parsed by Postgres)")]
+    for note in result.manual:
+        lines.append(f"-- MANUAL WORK NEEDED: {note}")
+    for note in result.advisories:
+        lines.append(f"-- REVIEW: {note}")
+    return "\n".join(lines) + "\n\n" + result.sql.strip() + "\n"
+
+
+def install_in_postgres(sql: str):
+    """Creates the function for real. Returns (True, "") or (False, reason)."""
+    import psycopg2
+    from config import PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DBNAME
+    conn = psycopg2.connect(host=PG_HOST, port=PG_PORT, user=PG_USER, password=PG_PASSWORD, dbname=PG_DBNAME)
+    try:
+        conn.cursor().execute(sql)
+        conn.commit()
+        return True, ""
+    except psycopg2.Error as e:
+        conn.rollback()
+        return False, (e.diag.message_primary or str(e)).strip()
+    finally:
+        conn.close()
+
+
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description="Translate Oracle PL/SQL procedures and functions to PL/pgSQL.")
+    parser.add_argument("--name", help="translate only this procedure/function")
+    parser.add_argument("--file", help="read procedures from a SQL script instead of from Oracle")
+    parser.add_argument("--out", default="translated_procedures", help="folder for the translated files")
+    parser.add_argument("--install", action="store_true", help="also create the clean results in Postgres")
+    parser.add_argument("--no-pg-check", action="store_true", help="skip asking Postgres to parse each result")
+    args = parser.parse_args(argv)
+
+    try:
+        if args.file:
+            objects = split_plsql_script(Path(args.file).read_text(encoding="utf-8"))
+            origin = args.file
+        else:
+            from read_schema import read_source_objects, ORACLE_SCHEMA
+            objects = read_source_objects()
+            origin = f"Oracle schema {ORACLE_SCHEMA}"
+    except Exception as e:
+        print(f"ERROR: could not read the procedures - {e}")
+        print("Tip: translate from a script instead with --file your_script.sql")
+        return 1
+
+    if args.name:
+        objects = [o for o in objects if o["name"].upper() == args.name.upper()]
+    if not objects:
+        print(f"No stored procedures or functions found in {origin}"
+              + (f" named {args.name}" if args.name else "") + ".")
+        return 0
+
+    out_dir = Path(args.out)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    results = []
+    for obj in objects:
+        print(f"\n=== {obj['type']} {obj['name']} ===")
+        try:
+            result = translate_procedure_detailed(obj["source"], obj["name"], obj["type"].lower(),
+                                                  check_postgres=not args.no_pg_check)
+        except (TranslationUnavailable, LLMConfigError) as e:
+            print(f"\nERROR: translation did not run - {e}")
+            print(f"Files already written to {out_dir}/ were left as they are.")
+            return 1
+        path = out_dir / f"{obj['name'].lower()}.sql"
+        path.write_text(_result_file_text(result), encoding="utf-8")
+        results.append((result, path))
+
+        if args.install and result.ok and result.pg_checked and not result.manual:
+            installed, why = install_in_postgres(result.sql)
+            print(f"  [install] {'created in Postgres' if installed else 'NOT created: ' + why}")
+
+    print("\n" + "=" * 64)
+    print(f"Translated {len(results)} from {origin}  ->  {out_dir}/")
+    for result, path in results:
+        status = "OK" if result.ok and not result.manual else ("NEEDS FIXING" if not result.ok else "NEEDS MANUAL WORK")
+        print(f"  {result.name:28} {status:18} attempts={result.attempts}"
+              f"{'  review notes=' + str(len(result.advisories)) if result.advisories else ''}")
+    return 0
 
 
 if __name__ == "__main__":
-    with open("sample_schema.sql") as f:
-        full_sql = f.read()
-
-    match = re.search(
-        r"CREATE OR REPLACE PROCEDURE checkout_book.*?^END checkout_book;\s*\n/",
-        full_sql,
-        re.DOTALL | re.MULTILINE,
-    )
-    if not match:
-        raise ValueError("Could not find checkout_book procedure in sample_schema.sql")
-
-    plsql_code = match.group(0)
-    print("--- Original PL/SQL ---")
-    print(plsql_code)
-
-    try:
-        result = translate_procedure(plsql_code)
-    except (TranslationUnavailable, LLMConfigError) as e:
-        # Exit cleanly WITHOUT touching checkout_book.plpgsql.sql, so an
-        # earlier good translation is never overwritten by a failed run.
-        print(f"\nERROR: translation did not run - {e}")
-        print("Existing checkout_book.plpgsql.sql (if any) was left unchanged.")
-        sys.exit(1)
-
-    print("\n--- Translated PL/pgSQL ---")
-    print(result)
-
-    with open("checkout_book.plpgsql.sql", "w") as f:
-        f.write(result)
-    print("\nSaved to checkout_book.plpgsql.sql")
-    
+    sys.exit(main())

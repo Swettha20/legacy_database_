@@ -17,7 +17,8 @@ History of fixes, kept here since each one taught something real:
 
 import json
 from ai_type_advisor import suggest_type_for_ambiguous_column
-from constraints import translate_default, translate_check
+from constraints import translate_default, translate_check, fk_columns
+import re
 
 
 def map_declared_number(precision, scale):
@@ -65,6 +66,57 @@ def map_declared_number(precision, scale):
             "note": f"Declared {declared} maps to NUMERIC({p},{scale}) - same precision and scale"}
 
 
+def map_other_type(source_type: str, column: dict):
+    """
+    Deterministic rules for the common non-NUMBER Oracle types. Returns a
+    mapping dict, or None if the type has no rule (it is then reported as
+    needing manual action - never guessed).
+
+    Text lengths come from the declared length in CHARACTERS (char_length),
+    not data_length (bytes): VARCHAR2(10 CHAR) holds 40 bytes in a UTF-8
+    database and used to become VARCHAR(40).
+    """
+    text_length = column.get("char_length") or column["length"]
+    t = source_type.upper()
+
+    def ok(pg, note, confidence="high"):
+        return {"pg_type": pg, "confidence": confidence, "note": note}
+
+    if t == "VARCHAR2" or t == "VARCHAR" or t == "NVARCHAR2":
+        return ok(f"VARCHAR({text_length})", "Direct equivalent - Postgres VARCHAR behaves the same way")
+    if t == "CHAR" or t == "NCHAR":
+        return ok(f"CHAR({text_length})", "Direct equivalent - fixed-length, blank-padded in both databases")
+    if t in ("CLOB", "NCLOB", "LONG"):
+        return ok("TEXT", f"Oracle {source_type} (large text) maps to Postgres TEXT, which has no size limit")
+    if t in ("BLOB", "LONG RAW") or t == "RAW":
+        return ok("BYTEA", f"Oracle {source_type} (binary) maps to Postgres BYTEA")
+    if t == "BINARY_FLOAT":
+        return ok("REAL", "32-bit IEEE float in both databases")
+    if t == "BINARY_DOUBLE":
+        return ok("DOUBLE PRECISION", "64-bit IEEE float in both databases")
+    if t == "FLOAT":
+        return ok("NUMERIC", "Oracle FLOAT is stored as an exact decimal number; unconstrained NUMERIC keeps "
+                             "every digit. Use DOUBLE PRECISION instead if speed matters more than exactness",
+                  "needs_review")
+
+    m = re.fullmatch(r"TIMESTAMP\((\d)\)( WITH (LOCAL )?TIME ZONE)?", t)
+    if m:
+        digits, tz, local = int(m.group(1)), m.group(2), m.group(3)
+        pg_digits = min(digits, 6)
+        base = "TIMESTAMPTZ" if tz else "TIMESTAMP"
+        pg = f"{base}({pg_digits})"
+        problems = []
+        if digits > 6:
+            problems.append(f"Oracle keeps {digits} fractional-second digits, Postgres keeps at most 6")
+        if tz:
+            problems.append("time zone handling should be checked after loading"
+                            + (" (LOCAL TIME ZONE depends on the session time zone)" if local else ""))
+        if problems:
+            return ok(pg, "; ".join(problems), "needs_review")
+        return ok(pg, "Direct equivalent")
+    return None
+
+
 def map_column_type(table_name: str, column: dict) -> dict:
     source_type = column["type"]
     length = column["length"]
@@ -86,13 +138,6 @@ def map_column_type(table_name: str, column: dict) -> dict:
             "note": "Auto-increment column (Oracle sequence.nextval) mapped to SERIAL",
         }
 
-    if source_type == "VARCHAR2":
-        return {
-            "pg_type": f"VARCHAR({length})",
-            "confidence": "high",
-            "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
-        }
-
     if source_type == "DATE":
         return {
             "pg_type": "TIMESTAMP",
@@ -109,6 +154,10 @@ def map_column_type(table_name: str, column: dict) -> dict:
         # than a blind NUMERIC default. Still flagged needs_review either way.
         print(f"  Asking AI advisor for {table_name}.{column['name']}...")
         return suggest_type_for_ambiguous_column(table_name, column["name"])
+
+    other = map_other_type(source_type, column)
+    if other is not None:
+        return other
 
     return {
         "pg_type": None,
@@ -136,22 +185,26 @@ def map_schema(ir: dict) -> dict:
             pk: column_map[pk]["pg_type"] for pk in table["primary_key"]
         }
 
-    # --- Pass 2: for every foreign key, override with the exact type of
+    # --- Pass 2: for every foreign key column, override with the exact type of
     # the column it references - this takes priority over anything Pass 1
     # decided (including an AI suggestion), since it's derivable with
-    # certainty from data already in the IR, not a guess.
+    # certainty from data already in the IR, not a guess. Works for keys that
+    # span several columns, and for keys that point at a UNIQUE column rather
+    # than the primary key. Tables are processed parents-first, so a
+    # referenced column has already received its own final type.
     for table in ir["tables"]:
         for fk in table["foreign_keys"]:
             ref_table = fk["references_table"]
-            ref_col = fk["references_column"]
-            ref_type = primary_key_types.get(ref_table, {}).get(ref_col)
-
-            if ref_type:
+            columns, ref_columns = fk_columns(fk)
+            for column, ref_column in zip(columns, ref_columns):
+                ref_type = table_mappings.get(ref_table, {}).get(ref_column, {}).get("pg_type")
+                if not ref_type:
+                    continue
                 fk_pg_type = {"SERIAL": "INTEGER", "BIGSERIAL": "BIGINT"}.get(ref_type, ref_type)
-                table_mappings[table["name"]][fk["column"]] = {
+                table_mappings[table["name"]][column] = {
                     "pg_type": fk_pg_type,
                     "confidence": "high",
-                    "note": f"Foreign key referencing {ref_table}.{ref_col} "
+                    "note": f"Foreign key referencing {ref_table}.{ref_column} "
                             f"({ref_type}) - matched to {fk_pg_type} so the "
                             f"foreign key constraint is valid in Postgres",
                 }
@@ -195,6 +248,8 @@ def map_schema(ir: dict) -> dict:
             mapped_table["columns"].append(mapped_col)
         mapped["tables"].append(mapped_table)
 
+    if ir.get("not_migrated"):
+        mapped["not_migrated"] = ir["not_migrated"]
     return mapped
 
 

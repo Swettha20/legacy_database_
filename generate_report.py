@@ -87,6 +87,15 @@ def generate_report(mapped_schema: dict) -> str:
     else:
         lines.append("  Nothing was left behind.")
 
+    not_migrated = mapped_schema.get("not_migrated")
+    if not_migrated:
+        lines.append("\n" + "-" * 60)
+        lines.append("NOT MIGRATED BY THIS TOOL (needs attention):")
+        lines.append("-" * 60)
+        for kind, names in not_migrated.items():
+            lines.append(f"\n  {kind}:")
+            lines.extend(f"    - {n}" for n in names)
+
     lines.append("\n" + "=" * 60)
     return "\n".join(lines)
 

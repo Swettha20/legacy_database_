@@ -16,7 +16,19 @@ trust the names are already clean instead of re-normalizing repeatedly.
 """
 
 import json
-from read_schema import read_schema
+from read_schema import read_schema, read_unmigrated_objects
+from constraints import fk_columns
+
+
+def _build_fk_ir(fk):
+    columns, referenced = fk_columns(fk)      # accepts the old one-column shape too
+    return {
+        "name": (fk.get("name") or "").lower() or None,
+        "columns": [c.lower() for c in columns],
+        "references_table": fk["references_table"].lower(),
+        "references_columns": [c.lower() for c in referenced],
+        "on_delete": fk.get("on_delete"),
+    }
 
 
 def build_table_ir(table_name, details):
@@ -27,6 +39,7 @@ def build_table_ir(table_name, details):
                 "name": col["name"].lower(),
                 "type": col["type"],          # raw source type - Day 4-5 maps this
                 "length": col["length"],
+                "char_length": col.get("char_length"),   # declared characters; None for non-text types
                 "precision": col.get("precision"),   # declared NUMBER(p,s); None = bare NUMBER
                 "scale": col.get("scale"),
                 "nullable": col["nullable"],
@@ -38,14 +51,7 @@ def build_table_ir(table_name, details):
             for col in details["columns"]
         ],
         "primary_key": [pk.lower() for pk in details["primary_key"]],
-        "foreign_keys": [
-            {
-                "column": fk["column"].lower(),
-                "references_table": fk["references_table"].lower(),
-                "references_column": fk["references_column"].lower(),
-            }
-            for fk in details["foreign_keys"]
-        ],
+        "foreign_keys": [_build_fk_ir(fk) for fk in details["foreign_keys"]],
         # .get(): older raw schemas (before these were read) simply have none
         "unique_constraints": [
             {"name": uc["name"].lower(), "columns": [c.lower() for c in uc["columns"]]}
@@ -102,18 +108,21 @@ def order_tables(tables: list) -> list:
     return ordered
 
 
-def build_ir(schema: dict) -> dict:
+def build_ir(schema: dict, not_migrated: dict = None) -> dict:
     """
     Takes the raw {table_name: {...}} dict from read_schema() and returns
     a clean IR: {"tables": [ {...}, {...} ]} - a list, not a dict, so table
     order is preserved and later phases can iterate predictably.
     """
-    return {
+    ir = {
         "tables": order_tables([
             build_table_ir(table_name, details)
             for table_name, details in schema.items()
         ])
     }
+    if not_migrated:
+        ir["not_migrated"] = not_migrated
+    return ir
 
 
 def save_ir(ir: dict, path: str = "schema_ir.json"):
@@ -124,7 +133,7 @@ def save_ir(ir: dict, path: str = "schema_ir.json"):
 
 if __name__ == "__main__":
     schema = read_schema()
-    ir = build_ir(schema)
+    ir = build_ir(schema, read_unmigrated_objects())
 
     print(json.dumps(ir, indent=2))
     save_ir(ir)

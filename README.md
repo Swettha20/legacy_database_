@@ -53,7 +53,7 @@ and a Streamlit UI, so it runs end-to-end from a single button click.
 - Real Oracle → real PostgreSQL schema migration, with correct type mapping including foreign key type resolution
 - Real data migration in batches, with ID sequences correctly reset to avoid collisions
 - AI-assisted type suggestions for ambiguous columns, validated against a fixed allowlist before being trusted
-- AI-powered PL/SQL → PL/pgSQL translation of a real stored procedure (`checkout_book`), including row locking, custom exceptions, and transaction handling — validated structurally, then confirmed by actually executing the translated function against a live database
+- AI-powered PL/SQL → PL/pgSQL translation of **every stored procedure and function in the schema**, each result checked by an Oracle-construct scan, by a real PostgreSQL parse, and by feeding any error back to the AI for another attempt; constructs that cannot be translated automatically are reported for a person, and behaviours that differ between the databases are listed as review notes (see [Stored procedures](#stored-procedures))
 - Provider-switchable AI layer (`llm_provider.py`) with timeouts, retries, rate-limit handling and a safe fallback, so an unreachable AI service degrades one step instead of crashing the run
 - A standalone confidence/flagging report
 - A working REST API (FastAPI) and browser UI (Streamlit), with confirmed graceful failure handling when a database is unreachable
@@ -105,6 +105,29 @@ python seed_oracle_volume.py --drop          # remove the Oracle scratch tables
 ```
 
 Not yet tested at hundreds of millions of rows, and the whole load runs as one transaction, so a very large migration needs enough disk for PostgreSQL's write-ahead log.
+
+### Stored procedures
+
+```powershell
+python plsql_translator.py                        # every procedure and function in the Oracle schema
+python plsql_translator.py --name CHECKOUT_BOOK   # just one
+python plsql_translator.py --file my_script.sql   # from a script instead of Oracle
+python plsql_translator.py --install              # also create the clean ones in Postgres
+```
+
+Each result is written to `translated_procedures/<name>.sql` with a header listing its status and any review notes. To try it on varied code first, `python load_sample_procedures.py` creates seven sample procedures in Oracle (loops, cursors, OUT parameters, dynamic SQL, error handling, and some constructs that cannot be translated).
+
+How a result is trusted, in order:
+1. **Oracle-construct scan** (`plsql_rules.py`): leftover `NVL`, `DECODE`, `SYSDATE`, `DUAL`, `ROWNUM`, `DBMS_OUTPUT`, `EXECUTE IMMEDIATE`, `SQL%ROWCOUNT`, Oracle exception names, `CURSOR c IS` and more. Several of these are *accepted* by Postgres when the function is created and only fail when it is called, so a parser alone is not enough. Every replacement the rules recommend was verified on a real PostgreSQL.
+2. **A real PostgreSQL parse**: `CREATE FUNCTION` runs inside a transaction that is rolled back, which catches syntax errors, unknown exception names, wrong `END` labels and bad types.
+3. **Feedback**: any problem found is sent back to the AI with the exact message, for up to three attempts.
+4. Every `SELECT ... INTO` must be `INTO STRICT`: Oracle raises an error for zero or several rows, while plain Postgres silently returns NULL or the first row.
+
+What it deliberately does **not** do:
+- **Constructs with no automatic translation** (`PRAGMA`, `BULK COLLECT`/`FORALL`, collection and record types, `CONNECT BY`, pipelined functions, `UTL_*`/`DBMS_*` packages) are not guessed. The AI is told to leave a `-- MANUAL:` comment, the file header lists what is missing, and `--install` skips them.
+- **Behaviour differences that no automatic check can see** are listed as review notes instead: Oracle treats `NULL` as an empty string in `||` and `''` as `NULL`; integer division truncates in Postgres; `substr(x, 0, n)` is one character short; `date + number` (days) is an error in Postgres. A translation can pass every check above and still be wrong at run time for these, so **call each translated function with realistic data before relying on it**.
+- **Triggers and packages** are listed in the report but not translated. Procedures that call other procedures are translated independently, so install them together.
+- **The quality of the AI's translation of your own code is not proven by this tool.** The checks catch the mistakes above; they cannot prove the logic is equivalent.
 
 ### Choosing what to migrate
 
@@ -168,7 +191,7 @@ python type_mapper.py       # map types (calls the AI advisor for ambiguous case
 python write_postgres_schema.py   # create the Postgres schema
 python migrate_data.py      # migrate the data
 python generate_report.py   # produce the confidence report
-python plsql_translator.py  # translate the stored procedure
+python plsql_translator.py  # translate all stored procedures/functions (see "Stored procedures")
 ```
 
 ## What's deliberately out of scope

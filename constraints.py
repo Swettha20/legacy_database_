@@ -136,3 +136,23 @@ def translate_check(condition, column_names):
     pg = " ".join(out)
     pg = pg.replace("( ", "(").replace(" )", ")").replace(" ,", ",")
     return pg, None
+
+
+# ------------------------------------------------------- foreign key shape
+
+
+def fk_columns(fk: dict):
+    """
+    (columns, referenced_columns) of a foreign key, as lists. Accepts both the
+    current shape (a key may span several columns) and the older single-column
+    shape ({"column": ..., "references_column": ...}), so previously saved
+    schema_ir.json / mapped_schema.json files keep working.
+    """
+    if "columns" in fk:
+        return list(fk["columns"]), list(fk["references_columns"])
+    return [fk["column"]], [fk["references_column"]]
+
+
+def on_delete_clause(rule) -> str:
+    """Oracle's FK delete rule -> Postgres clause. NO ACTION is the default in both."""
+    return {"CASCADE": " ON DELETE CASCADE", "SET NULL": " ON DELETE SET NULL"}.get((rule or "").upper(), "")

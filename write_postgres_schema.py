@@ -12,7 +12,7 @@ import json
 import psycopg2
 
 from config import PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DBNAME
-from constraints import is_system_generated_name
+from constraints import is_system_generated_name, fk_columns, on_delete_clause
 
 
 def build_create_table_sql(table: dict) -> str:
@@ -54,6 +54,9 @@ def build_create_table_sql(table: dict) -> str:
         column_lines.append(f"    {name}CHECK ({cc['pg_condition']})")
 
     for fk in table["foreign_keys"]:
+        columns, ref_columns = fk_columns(fk)
+        cols = ", ".join(f'"{c}"' for c in columns)
+        refs = ", ".join(f'"{c}"' for c in ref_columns)
         # A table that references ITSELF (employee -> manager) cannot always
         # be loaded in an order that satisfies the key row by row, so that
         # constraint is DEFERRABLE (checked at commit by the data loader).
@@ -61,8 +64,9 @@ def build_create_table_sql(table: dict) -> str:
         deferrable = (" DEFERRABLE INITIALLY IMMEDIATE"
                       if fk["references_table"] == table["name"] else "")
         column_lines.append(
-            f'    FOREIGN KEY ("{fk["column"]}") '
-            f'REFERENCES "{fk["references_table"]}"("{fk["references_column"]}"){deferrable}'
+            f'    FOREIGN KEY ({cols}) '
+            f'REFERENCES "{fk["references_table"]}"({refs})'
+            f'{on_delete_clause(fk.get("on_delete"))}{deferrable}'
         )
 
     columns_sql = ",\n".join(column_lines)
