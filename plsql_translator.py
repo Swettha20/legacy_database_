@@ -51,7 +51,21 @@ def clean_code_output(raw_output: str) -> str:
     return text
 
 
-def is_structurally_valid_plpgsql(code: str) -> tuple[bool, str]:
+def _code_only(code: str) -> str:
+    """Upper-cased code with string literals and -- comments blanked out, so
+    keyword checks don't trip on words inside messages like 'invalid number'."""
+    no_comments = re.sub(r"--[^\n]*", "", code)
+    return re.sub(r"'[^']*'", "''", no_comments).upper()
+
+
+def is_structurally_valid_plpgsql(code: str, original_plsql: str = "") -> tuple[bool, str]:
+    """
+    Structural checks, plus a few semantic checks for Oracle-to-Postgres
+    differences that compile fine but behave differently at runtime (each
+    one was verified against a real Postgres). Semantic checks that compare
+    against the source need original_plsql; without it they are skipped, so
+    existing callers keep working.
+    """
     code_upper = code.upper()
 
     if "CREATE OR REPLACE FUNCTION" not in code_upper and "CREATE FUNCTION" not in code_upper:
@@ -85,6 +99,32 @@ def is_structurally_valid_plpgsql(code: str) -> tuple[bool, str]:
                         "plain PL/pgSQL FUNCTION (only in a PROCEDURE called via CALL). "
                         "Remove them entirely; Postgres automatically rolls back a "
                         "function's changes when it raises an exception.")
+
+    body = _code_only(code)
+    original_upper = original_plsql.upper()
+
+    # Oracle type names left behind (a 7B model did this: v_available NUMBER).
+    if re.search(r"\b(NUMBER|VARCHAR2|NVARCHAR2)\b", body):
+        return False, ("Oracle-only type name (NUMBER / VARCHAR2) left in the code - "
+                        "use INTEGER, NUMERIC or VARCHAR instead")
+
+    if re.search(r"\bSYSDATE\b", body):
+        return False, "SYSDATE is Oracle-only - use NOW()"
+
+    # CURRENT_DATE silently drops the time of day (stores midnight), while
+    # Oracle's SYSDATE includes the time. Matches the type mapper, which maps
+    # Oracle DATE to TIMESTAMP for exactly this reason.
+    if "SYSDATE" in original_upper and re.search(r"\bCURRENT_DATE\b", body):
+        return False, ("CURRENT_DATE drops the time of day, but Oracle's SYSDATE includes "
+                        "it - use NOW() (e.g. NOW() + INTERVAL '14 days')")
+
+    # In Postgres, plain SELECT ... INTO never raises NO_DATA_FOUND (the
+    # variable just becomes NULL), so an Oracle NO_DATA_FOUND handler becomes
+    # dead code and the error message changes. INTO STRICT restores it.
+    if ("NO_DATA_FOUND" in original_upper and "NO_DATA_FOUND" in body
+            and not re.search(r"\bINTO\s+STRICT\b", body)):
+        return False, ("WHEN NO_DATA_FOUND never fires in Postgres unless the query uses "
+                        "SELECT ... INTO STRICT variable - add STRICT")
 
     return True, ""
 
@@ -120,6 +160,17 @@ def build_prompt(plsql_code: str, retry: bool = False, error: str = "") -> str:
         "it raises an exception, so an explicit ROLLBACK is both invalid and "
         "unnecessary. Just re-raise the exception with RAISE; if you need a "
         "generic 'catch everything and re-throw' handler.\n\n"
+        "5. Dates and times - Oracle's SYSDATE includes the time of day. Replace it "
+        "with NOW(), NEVER with CURRENT_DATE (which drops the time). Date arithmetic "
+        "like SYSDATE + 14 (14 days) becomes NOW() + INTERVAL '14 days'.\n\n"
+        "6. NO_DATA_FOUND - in Postgres a plain SELECT ... INTO does NOT raise "
+        "NO_DATA_FOUND when no row matches, so an Oracle WHEN NO_DATA_FOUND handler "
+        "would never run. If the procedure has such a handler, write the query as "
+        "SELECT ... INTO STRICT variable ... so the handler works as in Oracle.\n\n"
+        "7. Types - never leave Oracle type names (NUMBER, VARCHAR2) in the output. "
+        "Use INTEGER for whole-number IDs, counts and parameters, NUMERIC for "
+        "decimals, and VARCHAR for text. Declare function parameters as plain types "
+        "(no IN keyword needed).\n\n"
     )
     if retry:
         base += (
@@ -138,7 +189,7 @@ def translate_procedure(plsql_code: str) -> str:
     raw_output = ask_llm(build_prompt(plsql_code, retry=False))
     cleaned = clean_code_output(raw_output)
 
-    is_valid, error = is_structurally_valid_plpgsql(cleaned)
+    is_valid, error = is_structurally_valid_plpgsql(cleaned, plsql_code)
     if is_valid:
         print("  [translate] Attempt 1 is structurally valid.")
         return cleaned
@@ -147,14 +198,14 @@ def translate_procedure(plsql_code: str) -> str:
     raw_retry = ask_llm(build_prompt(plsql_code, retry=True, error=error))
     cleaned_retry = clean_code_output(raw_retry)
 
-    is_valid_retry, error_retry = is_structurally_valid_plpgsql(cleaned_retry)
+    is_valid_retry, error_retry = is_structurally_valid_plpgsql(cleaned_retry, plsql_code)
     if is_valid_retry:
         print("  [translate] Retry is structurally valid.")
         return cleaned_retry
 
     print("  [translate] Still invalid after retry, returning with warning.")
     warning = (
-        "-- WARNING: This PL/pgSQL failed structural validation even after a\n"
+        "-- WARNING: This PL/pgSQL failed validation even after a\n"
         f"-- retry ({error_retry}). It may be incomplete or malformed.\n"
         "-- Please review manually before running against a database.\n\n"
     )

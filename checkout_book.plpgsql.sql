@@ -1,9 +1,10 @@
-CREATE OR REPLACE FUNCTION checkout_book(p_member_id INTEGER, p_book_id INTEGER)
+CREATE OR REPLACE FUNCTION checkout_book(p_member_id integer, p_book_id integer)
 RETURNS void AS $$
 DECLARE
-    v_available INTEGER;
+    v_available integer;
 BEGIN
-    SELECT available_copies INTO v_available
+    SELECT available_copies
+    INTO STRICT v_available
     FROM books
     WHERE id = p_book_id
     FOR UPDATE;
@@ -13,12 +14,11 @@ BEGIN
     END IF;
 
     INSERT INTO loans (member_id, book_id, loan_date, due_date)
-    VALUES (p_member_id, p_book_id, NOW(), NOW() + INTERVAL '14' DAY);
+    VALUES (p_member_id, p_book_id, NOW(), NOW() + INTERVAL '14 days');
 
     UPDATE books
     SET available_copies = available_copies - 1
     WHERE id = p_book_id;
-
 EXCEPTION
     WHEN NO_DATA_FOUND THEN
         RAISE EXCEPTION 'No such book_id %', p_book_id;
