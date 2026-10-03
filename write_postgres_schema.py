@@ -12,6 +12,7 @@ import json
 import psycopg2
 
 from config import PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DBNAME
+from constraints import is_system_generated_name
 
 
 def build_create_table_sql(table: dict) -> str:
@@ -29,11 +30,28 @@ def build_create_table_sql(table: dict) -> str:
             continue
 
         nullability = "" if col["nullable"] else " NOT NULL"
-        column_lines.append(f'    "{col["name"]}" {col["pg_type"]}{nullability}')
+        default = f" DEFAULT {col['pg_default']}" if col.get("pg_default") else ""
+        column_lines.append(f'    "{col["name"]}" {col["pg_type"]}{default}{nullability}')
 
     if table["primary_key"]:
         pk_cols = ", ".join(f'"{pk}"' for pk in table["primary_key"])
         column_lines.append(f"    PRIMARY KEY ({pk_cols})")
+
+    usable_columns = {c["name"] for c in table["columns"] if c["pg_type"] is not None}
+
+    for uc in table.get("unique_constraints", []):
+        if not all(c in usable_columns for c in uc["columns"]):
+            print(f"  WARNING: skipping UNIQUE on {uc['columns']} - a column has no type mapping")
+            continue
+        cols = ", ".join(f'"{c}"' for c in uc["columns"])
+        name = "" if is_system_generated_name(uc["name"]) else f'CONSTRAINT "{uc["name"]}" '
+        column_lines.append(f"    {name}UNIQUE ({cols})")
+
+    for cc in table.get("check_constraints", []):
+        if not cc.get("pg_condition"):
+            continue  # untranslatable: reported by generate_report, never guessed
+        name = "" if is_system_generated_name(cc["name"]) else f'CONSTRAINT "{cc["name"]}" '
+        column_lines.append(f"    {name}CHECK ({cc['pg_condition']})")
 
     for fk in table["foreign_keys"]:
         column_lines.append(

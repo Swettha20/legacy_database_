@@ -52,6 +52,41 @@ def generate_report(mapped_schema: dict) -> str:
                     lines.append(f"\n  {table['name']}.{col['name']}")
                     lines.append(f"    Reason: {col['note']}")
 
+    # ---- constraints and defaults (previously dropped silently) ----
+    n_unique = n_check = n_default = 0
+    review = []
+    for table in mapped_schema["tables"]:
+        n_unique += len(table.get("unique_constraints", []))
+        for cc in table.get("check_constraints", []):
+            if cc.get("pg_condition"):
+                n_check += 1
+            else:
+                review.append(f"  {table['name']}: CHECK ({cc['oracle_condition']})\n"
+                              f"    Not carried over: {cc['note']}")
+        for col in table["columns"]:
+            if col.get("oracle_default"):
+                if col.get("pg_default"):
+                    n_default += 1
+                else:
+                    review.append(f"  {table['name']}.{col['name']}: DEFAULT {col['oracle_default']}\n"
+                                  f"    Not carried over: {col['default_note']}")
+
+    lines.append("\n" + "-" * 60)
+    lines.append("CONSTRAINTS AND DEFAULTS:")
+    lines.append("-" * 60)
+    lines.append(f"  UNIQUE constraints migrated: {n_unique}")
+    lines.append(f"  CHECK constraints migrated:  {n_check}")
+    lines.append(f"  Column defaults migrated:    {n_default}")
+    has_constraint_data = any("unique_constraints" in t for t in mapped_schema["tables"])
+    if not has_constraint_data:
+        lines.append("  (This mapped_schema.json was produced before constraints were read,")
+        lines.append("   so nothing is recorded here - re-run the migration to include them.)")
+    elif review:
+        lines.append(f"\n  NOT migrated - needs manual review ({len(review)}):")
+        lines.extend("\n" + r for r in review)
+    else:
+        lines.append("  Nothing was left behind.")
+
     lines.append("\n" + "=" * 60)
     return "\n".join(lines)
 

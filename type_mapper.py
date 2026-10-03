@@ -17,6 +17,7 @@ History of fixes, kept here since each one taught something real:
 
 import json
 from ai_type_advisor import suggest_type_for_ambiguous_column
+from constraints import translate_default, translate_check
 
 
 def map_column_type(table_name: str, column: dict) -> dict:
@@ -100,20 +101,41 @@ def map_schema(ir: dict) -> dict:
 
     # --- Assemble final output ---
     for table in ir["tables"]:
+        column_names = [c["name"] for c in table["columns"]]
         mapped_table = {
             "name": table["name"],
             "primary_key": table["primary_key"],
             "foreign_keys": table["foreign_keys"],
+            "unique_constraints": [
+                uc for uc in table.get("unique_constraints", [])
+                if all(c in column_names for c in uc["columns"])
+            ],
+            "check_constraints": [],
             "columns": [],
         }
+        for check in table.get("check_constraints", []):
+            pg_condition, note = translate_check(check["condition"], column_names)
+            mapped_table["check_constraints"].append({
+                "name": check["name"],
+                "oracle_condition": check["condition"],
+                "pg_condition": pg_condition,
+                "note": note,
+            })
         for col in table["columns"]:
             mapping = table_mappings[table["name"]][col["name"]]
-            mapped_table["columns"].append({
+            mapped_col = {
                 "name": col["name"],
                 "source_type": col["type"],
                 "nullable": col["nullable"],
                 **mapping,
-            })
+            }
+            # Auto-increment columns get their default from SERIAL itself.
+            if col.get("default") and not col.get("is_auto_increment"):
+                pg_default, default_note = translate_default(col["default"])
+                mapped_col["oracle_default"] = col["default"].strip()
+                mapped_col["pg_default"] = pg_default
+                mapped_col["default_note"] = default_note
+            mapped_table["columns"].append(mapped_col)
         mapped["tables"].append(mapped_table)
 
     return mapped
@@ -130,6 +152,18 @@ def print_confidence_report(mapped: dict):
             }[col["confidence"]]
             print(f"  [{icon}] {col['name']}: {col['source_type']} -> {col['pg_type']}")
             print(f"          {col['note']}")
+            if col.get("oracle_default"):
+                if col.get("pg_default"):
+                    print(f"          default: {col['oracle_default']} -> {col['pg_default']}")
+                else:
+                    print(f"          [REVIEW] default not carried over: {col['default_note']}")
+        for uc in table.get("unique_constraints", []):
+            print(f"  [OK] UNIQUE ({', '.join(uc['columns'])})")
+        for cc in table.get("check_constraints", []):
+            if cc["pg_condition"]:
+                print(f"  [OK] CHECK ({cc['pg_condition']})")
+            else:
+                print(f"  [REVIEW] CHECK ({cc['oracle_condition']}) not carried over: {cc['note']}")
 
 
 if __name__ == "__main__":

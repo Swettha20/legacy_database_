@@ -20,6 +20,7 @@ so it only connects when the function is actually called.
 import oracledb
 
 from config import ORACLE_USER, ORACLE_PASSWORD, ORACLE_DSN
+from constraints import is_not_null_check
 
 # We only care about the tables *we* created, not Oracle's own SYSTEM
 # tables (there are hundreds of those). List them explicitly for now;
@@ -113,6 +114,52 @@ def get_foreign_keys(cursor, table_name):
     return foreign_keys
 
 
+def get_unique_constraints(cursor, table_name):
+    """UNIQUE constraints (constraint_type 'U'), grouped so a multi-column
+    UNIQUE comes back as ONE constraint with several columns."""
+    cursor.execute(
+        """
+        SELECT ac.constraint_name, acc.column_name
+        FROM all_constraints ac
+        JOIN all_cons_columns acc
+          ON ac.constraint_name = acc.constraint_name
+         AND ac.owner = acc.owner
+        WHERE ac.table_name = :table_name
+          AND ac.owner = 'SYSTEM'
+          AND ac.constraint_type = 'U'
+        ORDER BY ac.constraint_name, acc.position
+        """,
+        table_name=table_name,
+    )
+    grouped = {}
+    for constraint_name, column_name in cursor.fetchall():
+        grouped.setdefault(constraint_name, []).append(column_name)
+    return [{"name": name, "columns": cols} for name, cols in grouped.items()]
+
+
+def get_check_constraints(cursor, table_name):
+    """CHECK constraints (constraint_type 'C'). Oracle also stores every
+    NOT NULL as a 'C' constraint; those are filtered out because nullability
+    is already migrated separately."""
+    cursor.execute(
+        """
+        SELECT constraint_name, search_condition
+        FROM all_constraints
+        WHERE table_name = :table_name
+          AND owner = 'SYSTEM'
+          AND constraint_type = 'C'
+        ORDER BY constraint_name
+        """,
+        table_name=table_name,
+    )
+    checks = []
+    for constraint_name, condition in cursor.fetchall():
+        if condition is None or is_not_null_check(condition):
+            continue
+        checks.append({"name": constraint_name, "condition": condition.strip()})
+    return checks
+
+
 def read_schema():
     """
     Opens its own Oracle connection, reads all OUR_TABLES' metadata,
@@ -129,6 +176,8 @@ def read_schema():
                 "columns": get_columns(cursor, table_name),
                 "primary_key": get_primary_key(cursor, table_name),
                 "foreign_keys": get_foreign_keys(cursor, table_name),
+                "unique_constraints": get_unique_constraints(cursor, table_name),
+                "check_constraints": get_check_constraints(cursor, table_name),
             }
     finally:
         cursor.close()
@@ -152,6 +201,16 @@ def print_schema(schema):
             print("Foreign keys:")
             for fk in details["foreign_keys"]:
                 print(f"  - {fk['column']} -> {fk['references_table']}.{fk['references_column']}")
+
+        if details.get("unique_constraints"):
+            print("Unique constraints:")
+            for uc in details["unique_constraints"]:
+                print(f"  - {uc['name']}: {', '.join(uc['columns'])}")
+
+        if details.get("check_constraints"):
+            print("Check constraints:")
+            for cc in details["check_constraints"]:
+                print(f"  - {cc['name']}: {cc['condition']}")
 
 
 if __name__ == "__main__":

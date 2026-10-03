@@ -44,6 +44,15 @@ def build_table_ir(table_name, details):
             }
             for fk in details["foreign_keys"]
         ],
+        # .get(): older raw schemas (before these were read) simply have none
+        "unique_constraints": [
+            {"name": uc["name"].lower(), "columns": [c.lower() for c in uc["columns"]]}
+            for uc in details.get("unique_constraints", [])
+        ],
+        "check_constraints": [
+            {"name": cc["name"].lower(), "condition": cc["condition"]}
+            for cc in details.get("check_constraints", [])
+        ],
     }
 
 
