@@ -26,14 +26,22 @@ schema_ir.json — a clean, source-agnostic Intermediate Representation
 mapped_schema.json — Oracle types mapped to PostgreSQL types, with a
                       confidence level and reasoning note on every column
      │  write_postgres_schema.py — generates and runs CREATE TABLE statements
-     │  migrate_data.py — copies real data across in batches, preserving
-     │                     foreign key relationships and ID sequences
+     │  migrate_data.py — streams real data across in batches with COPY, in one
+     │                     all-or-nothing transaction, preserving foreign key
+     │                     relationships and ID sequences
      ▼
 PostgreSQL (target) — real schema, real data
 
-Separately: plsql_translator.py — translates PL/SQL stored procedures to
-PL/pgSQL via the AI model, validated structurally and by actually running
-the translated function against a live database before trusting it.
+Separately: plsql_translator.py — translates every PL/SQL stored procedure
+and function to PL/pgSQL via the AI model. Each result is scanned for Oracle
+constructs that cannot remain (plsql_rules.py), parsed by a real PostgreSQL
+(in a transaction that is rolled back), and sent back to the AI with the exact
+error if either check fails. compare_procedures.py then runs the same calls
+against the Oracle original and the translation and compares results, errors,
+printed output and side effects.
+
+llm_provider.py — the one place that talks to an AI model (Ollama or Groq).
+constraints.py — translates UNIQUE / CHECK / DEFAULT and foreign-key shapes.
 
 generate_report.py — produces a standalone, human-readable confidence
 report from mapped_schema.json.
@@ -55,8 +63,15 @@ and a Streamlit UI, so it runs end-to-end from a single button click.
 - AI-assisted type suggestions for ambiguous columns, validated against a fixed allowlist before being trusted
 - AI-powered PL/SQL → PL/pgSQL translation of **every stored procedure and function in the schema**, each result checked by an Oracle-construct scan, by a real PostgreSQL parse, and by feeding any error back to the AI for another attempt; constructs that cannot be translated automatically are reported for a person, and behaviours that differ between the databases are listed as review notes (see [Stored procedures](#stored-procedures))
 - Provider-switchable AI layer (`llm_provider.py`) with timeouts, retries, rate-limit handling and a safe fallback, so an unreachable AI service degrades one step instead of crashing the run
+- Schema fidelity beyond tables and columns: `UNIQUE`, `CHECK` and `DEFAULT` constraints, composite and self-referencing foreign keys with `ON DELETE` rules, declared `NUMBER(p,s)` precision, and a broader set of column types (text, large objects, binary, timestamps with time zones). Whatever it cannot carry over is listed in the report instead of being dropped silently
+- Automatic table discovery with dependency ordering (parents before children), so it is not tied to the sample schema
+- Bulk loading with `COPY`, about 8x faster than row-by-row insert (roughly 78,000-88,000 rows/s measured against PostgreSQL), with a per-table row-count check
+- Refuses to silently change data: a fraction is never rounded into a whole-number column, and a failure anywhere rolls the whole load back
+- A differential checker (`compare_procedures.py`) that compares an Oracle procedure with its translation call by call
 - A standalone confidence/flagging report
 - A working REST API (FastAPI) and browser UI (Streamlit), with confirmed graceful failure handling when a database is unreachable
+
+**Verification status, stated plainly.** The three-table sample schema, the AI type advisor, and eight stored procedures were run end to end against a real Oracle XE container, a real PostgreSQL and a real AI provider. Larger and messier schemas, dirty data, volume, and failure cases (a database or the AI going down mid-run) were tested against a real PostgreSQL with a simulated Oracle source. The scale tested is about a million rows; nothing near gigabytes has been tried.
 
 ## Real bugs found and fixed along the way
 
@@ -67,6 +82,12 @@ Worth stating plainly, since debugging real issues is the actual engineering wor
 3. **Invalid transaction control in translated PL/pgSQL** — the AI's first translation attempt included `COMMIT`/`ROLLBACK` inside the function body, which Oracle procedures allow but plain PL/pgSQL functions do not. This passed structural validation but failed at actual execution time. Fixed by updating the prompt to omit transaction control entirely (relying on Postgres's automatic rollback-on-exception behavior) and adding a validator check that catches this pattern going forward.
 4. **Translations that compile but behave differently** — checked against a real PostgreSQL, not assumed: Oracle's `SYSDATE` was translated to `CURRENT_DATE`, silently storing midnight instead of the real time (fixed: `NOW()`); and Oracle's `WHEN NO_DATA_FOUND` handler never fires in Postgres for a plain `SELECT ... INTO`, so a missing book produced a foreign-key error instead of the intended message (fixed: `INTO STRICT`). Both are now enforced in the prompt *and* caught by the validator, which retries with the specific error.
 5. **A hardcoded model name quietly retiring** — the cloud model first chosen was shut down by its provider, surfacing as a bare `404`. Fixed by making the model configurable, showing the provider's own error text, and adding `python llm_provider.py --models` to list what a key can currently use.
+6. **Constraints silently dropped** — only primary keys, foreign keys and `NOT NULL` were migrated, so the new database accepted duplicate emails and negative stock counts that Oracle rejected. Found by pushing dirty data through the pipeline; `UNIQUE`, `CHECK` and `DEFAULT` are now migrated, and anything untranslatable is flagged in the report.
+7. **Silent rounding** — Postgres stores `2.5` in an `INTEGER` column as `3` with no error, and the AI had chosen that type from the column name alone. The loader now refuses a fraction in a whole-number column and says exactly where it is.
+8. **A failed rollback hiding the real error** — when the database died mid-load, the error handler's own `rollback()` failed and replaced the real cause with `connection already closed`.
+9. **`SELECT ... INTO` is not the same in Postgres** — Oracle raises an error for zero or several rows; a plain Postgres `SELECT INTO` silently returns NULL or the first row, so an Oracle `NO_DATA_FOUND` handler never ran. Verified against a real Postgres, enforced in the prompt and the validator.
+10. **A stale copy blocking a good translation** — `CREATE OR REPLACE FUNCTION` refuses to change a return type, so an older installed version caused the validator to reject correct code. Found on the first real run; installs now replace by name inside one transaction.
+
 
 ## Getting set up
 
@@ -200,12 +221,14 @@ Load the sample schema (`sample_schema.sql`) against the Oracle container, using
 
 Two terminals:
 ```powershell
-uvicorn api:app --reload
+uvicorn api:app
 ```
 ```powershell
 streamlit run streamlit_app.py
 ```
 Then open `http://localhost:8501` and click "Start Migration."
+
+Note: use `uvicorn api:app --reload` only while developing. With `--reload`, saving any file restarts the server and kills a migration that is running.
 
 **Option B — step by step, via the individual scripts:**
 ```powershell
@@ -216,6 +239,8 @@ python write_postgres_schema.py   # create the Postgres schema
 python migrate_data.py      # migrate the data
 python generate_report.py   # produce the confidence report
 python plsql_translator.py  # translate all stored procedures/functions (see "Stored procedures")
+python plsql_translator.py --install   # create the clean ones in Postgres
+python compare_procedures.py   # compare each one with its Oracle original
 ```
 
 ## What's deliberately out of scope
@@ -225,4 +250,6 @@ Documented honestly rather than hidden:
 - **Additional database pairs** — this tool supports Oracle → PostgreSQL specifically. The IR-based architecture is designed to support additional pairs without a rewrite, but that wasn't built, to keep this one pair genuinely solid rather than several pairs half-working.
 - **Celery/Redis background job queue, a full React dashboard, true GB-scale stress testing** — deferred in favor of a simpler FastAPI + Streamlit stack that fit a focused build timeline. The batching logic used for data migration is the same pattern that would scale to larger data; it just hasn't been tested at GB scale.
 - **Source database performance-parameter migration** — this tool migrates schema, data, and logic. A source database's tuning (memory allocation, connection limits, etc.) is tied to its specific hardware and workload and doesn't transfer meaningfully to different target hardware — intentionally not attempted.
+- **Reported but not migrated:** ordinary indexes, views, triggers, packages and standalone sequences are listed in the report so nothing is lost silently, but they are not translated. Exotic column types (`XMLTYPE`, `INTERVAL`, spatial) are flagged for manual work, and circular foreign keys between tables are refused with a clear message.
+- **Proof of logical equivalence for stored procedures** — the checks catch known classes of mistakes and the differential checker compares behaviour for the calls you list, but neither can prove a translation equivalent for every input.
 - **Character set / encoding validation** — a known, common real-world migration risk (source/target character set mismatches can silently corrupt data) that this project's sample data didn't exercise. Worth checking explicitly in any real migration.
