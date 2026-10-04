@@ -127,9 +127,31 @@ How a result is trusted, in order:
 
 What it deliberately does **not** do:
 - **Constructs with no automatic translation** (`PRAGMA`, `BULK COLLECT`/`FORALL`, collection and record types, `CONNECT BY`, pipelined functions, `UTL_*`/`DBMS_*` packages) are not guessed. The AI is told to leave a `-- MANUAL:` comment, the file header lists what is missing, and `--install` skips them.
-- **Behaviour differences that no automatic check can see** are listed as review notes instead: Oracle treats `NULL` as an empty string in `||` and `''` as `NULL`; integer division truncates in Postgres; `substr(x, 0, n)` is one character short; `date + number` (days) is an error in Postgres. A translation can pass every check above and still be wrong at run time for these, so **call each translated function with realistic data before relying on it**.
+- **Behaviour differences that no automatic check can see** are listed as review notes instead: Oracle treats `NULL` as an empty string in `||` and `''` as `NULL`; integer division truncates in Postgres; `substr(x, 0, n)` is one character short; `date + number` (days) is an error in Postgres. A translation can pass every check above and still be wrong at run time for these, so **call each translated function with realistic data before relying on it** - or let `compare_procedures.py` do it against the Oracle original.
 - **Triggers and packages** are listed in the report but not translated. Procedures that call other procedures are translated independently, so install them together.
 - **The quality of the AI's translation of your own code is not proven by this tool.** The checks catch the mistakes above; they cannot prove the logic is equivalent.
+
+### Checking that a translation behaves like the original
+
+Parsing proves a translation is valid Postgres; it cannot prove it does the same thing. `compare_procedures.py` makes the same call against the Oracle original and the Postgres translation, on the same data, and compares everything observable:
+
+```powershell
+python compare_procedures.py                     # uses procedure_tests.json
+python compare_procedures.py --tests my_tests.json
+python compare_procedures.py --allow-commit      # also run originals that COMMIT (see below)
+```
+
+It compares the return value or `OUT` parameters, the error (Oracle's `RAISE_APPLICATION_ERROR` text against the translated `RAISE EXCEPTION` text, and Oracle's standard errors against the matching Postgres error class), what was printed (`DBMS_OUTPUT` against `RAISE NOTICE`), and side effects (the `SELECT`s you list under `observe`, run in both databases after the call). Each call is rolled back on both sides. `procedure_tests.json` has calls for the sample procedures, including the error branches; the file format is described at the top of `compare_procedures.py`.
+
+Tested against injected translation bugs: a wrong error message, an off-by-one day, a missing `STRICT` (an unknown row silently returning NULL), a forgotten `WHERE`, and `SYSDATE` translated to `CURRENT_DATE` (losing the time of day) were all reported as different; the corrected versions were reported as identical.
+
+What it does not do, plainly:
+- **It proves equivalence only for the calls you list.** Cover the edge cases: no rows, bad input, every error branch.
+- **An Oracle original that `COMMIT`s is skipped by default**, because a commit cannot be rolled back and would change your Oracle data. `--allow-commit` runs it for real; re-migrate afterwards to put the data back in step.
+- **Generated ids can differ.** Sequences are not rolled back in either database, so a new row's id may not match; `observe` columns that are not generated ids.
+- **Date/times are compared within a tolerance** (5 seconds by default), since `SYSDATE` and `NOW()` are never the same instant.
+- **The two databases must hold the same data.** List your tables under `"tables"` and it warns when the row counts differ.
+- The Postgres side of this tool was tested against a real PostgreSQL. The Oracle side was tested against a stand-in that speaks the driver's API, so its first run on your Oracle is the real test of that half.
 
 ### Choosing what to migrate
 

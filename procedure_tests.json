@@ -1,0 +1,29 @@
+{
+  "tables": ["members", "books", "loans"],
+  "time_tolerance_seconds": 5,
+  "cases": [
+    {"call": "member_loan_count", "args": [1], "returns": "number"},
+    {"call": "member_loan_count", "args": [2], "returns": "number"},
+    {"call": "member_loan_count", "args": [99], "returns": "number", "note": "a member with no loans"},
+
+    {"call": "count_rows", "args": ["members"], "returns": "number", "note": "dynamic SQL"},
+    {"call": "count_rows", "args": ["no_such_table"], "returns": "number", "note": "both must fail with a 'table does not exist' error"},
+
+    {"call": "book_status", "args": [1], "returns": "string"},
+    {"call": "book_status", "args": [2], "returns": "string"},
+    {"call": "book_status", "args": [99], "returns": "string", "note": "unknown book: the NO_DATA_FOUND handler must fire"},
+
+    {"call": "renew_loan", "args": [999, 5], "note": "no such loan: error message"},
+    {"call": "renew_loan", "args": [1, 99], "note": "days out of range: error message"},
+    {"call": "renew_loan", "args": [1, 5], "observe": ["SELECT id, due_date FROM loans ORDER BY id"], "note": "the due date must move by the same amount"},
+
+    {"call": "add_member_safe", "args": ["Test", "asha.rao@example.com", {"out": "number"}], "note": "a duplicate email returns the existing id (OUT parameter)"},
+
+    {"call": "list_overdue_loans", "args": [], "note": "compares what is printed (DBMS_OUTPUT vs RAISE NOTICE)"},
+
+    {"call": "checkout_book", "args": [1, 1],
+     "observe": ["SELECT id, available_copies FROM books ORDER BY id",
+                 "SELECT member_id, book_id, return_date FROM loans ORDER BY member_id, book_id"],
+     "note": "COMMITs in Oracle, so it is skipped unless you pass --allow-commit"}
+  ]
+}
