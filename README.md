@@ -243,6 +243,12 @@ python plsql_translator.py --install   # create the clean ones in Postgres
 python compare_procedures.py   # compare each one with its Oracle original
 ```
 
+**Option C — check that everything is in working order, in one command:**
+```powershell
+python check_setup.py
+```
+It reads and changes nothing, and prints a PASS / WARN / FAIL checklist with the fix next to every problem: configuration, the AI provider, both databases, that every table, row count, `UNIQUE` / foreign key / `CHECK` constraint and id sequence made it across, that the translated procedures are installed, and that the containers restart on their own. Use `--skip-ai` or `--skip-docker` to leave those out. On very large tables the row-count check runs `COUNT(*)` on both sides, which takes a while.
+
 ## What's deliberately out of scope
 
 Documented honestly rather than hidden:
