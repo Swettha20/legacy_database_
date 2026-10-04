@@ -157,11 +157,13 @@ def check_sequences(pg_conn, oracle_names: list) -> Check:
 
 
 def check_functions(oracle_conn, pg_conn) -> Check:
+    from plsql_rules import find_manual_constructs
     from read_schema import read_source_objects
     try:
-        wanted = sorted({o["name"].lower() for o in read_source_objects()})
+        sources = {o["name"].lower(): o.get("source", "") for o in read_source_objects()}
     except Exception as e:
         return Check("SKIP", "translated stored procedures are installed", _first_line(e))
+    wanted = sorted(sources)
     if not wanted:
         return Check("PASS", "translated stored procedures are installed", "the schema has none")
     cur = pg_conn.cursor()
@@ -170,11 +172,19 @@ def check_functions(oracle_conn, pg_conn) -> Check:
     have = {r[0] for r in cur.fetchall()}
     pg_conn.rollback()
     missing = [n for n in wanted if n not in have]
-    if missing:
+    # --install never installs a function that still needs manual work, so
+    # telling the user to run it for those would send them in a circle.
+    manual = [n for n in missing if find_manual_constructs(sources[n])]
+    fixable = [n for n in missing if n not in manual]
+    installed = len(wanted) - len(missing)
+    note = (f"; {', '.join(manual)} {'needs' if len(manual) == 1 else 'need'} manual work "
+            f"(see translated_procedures/) and is deliberately not installed") if manual else ""
+    if fixable:
         return Check("WARN", "translated stored procedures are installed",
-                     f"{len(wanted) - len(missing)} of {len(wanted)}; not installed: {', '.join(missing)}",
-                     "run: python plsql_translator.py --install   (functions that need manual work are never installed)")
-    return Check("PASS", "translated stored procedures are installed", f"{len(wanted)} of {len(wanted)}")
+                     f"{installed} of {len(wanted)}; not installed: {', '.join(fixable)}{note}",
+                     "run: python plsql_translator.py --install")
+    return Check("PASS", "translated stored procedures are installed",
+                 f"{installed} of {len(wanted)}{note}")
 
 
 def check_docker() -> Check:
