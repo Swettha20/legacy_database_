@@ -2,3 +2,12 @@ venv/
 __pycache__/
 *.pyc
 .env
+
+# written by start_demo.py
+logs/
+
+# written by convert_file.py
+converted/
+
+# written by the web page's upload feature
+uploads/

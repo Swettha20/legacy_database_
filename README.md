@@ -65,9 +65,15 @@ and a Streamlit UI, so it runs end-to-end from a single button click.
 - Provider-switchable AI layer (`llm_provider.py`) with timeouts, retries, rate-limit handling and a safe fallback, so an unreachable AI service degrades one step instead of crashing the run
 - Schema fidelity beyond tables and columns: `UNIQUE`, `CHECK` and `DEFAULT` constraints, composite and self-referencing foreign keys with `ON DELETE` rules, declared `NUMBER(p,s)` precision, and a broader set of column types (text, large objects, binary, timestamps with time zones). Whatever it cannot carry over is listed in the report instead of being dropped silently
 - Automatic table discovery with dependency ordering (parents before children), so it is not tied to the sample schema
-- Bulk loading with `COPY`, about 8x faster than row-by-row insert (roughly 78,000-88,000 rows/s measured against PostgreSQL), with a per-table row-count check
+- Bulk loading with `COPY`, about 8x faster than row-by-row insert (roughly 73,000-88,000 rows/s measured against PostgreSQL), with a per-table row-count check
 - Refuses to silently change data: a fraction is never rounded into a whole-number column, and a failure anywhere rolls the whole load back
 - A differential checker (`compare_procedures.py`) that compares an Oracle procedure with its translation call by call
+- A web page that shows the migration live - which of the five steps it is on, which table is being copied and how many rows so far, and warnings as they appear - and a button to download **the migrated PostgreSQL file** itself (a plain `.sql` script that loads anywhere); the report, and everything as one `.zip`, are under a collapsed "More downloads" section. After a failure no file is offered, because there is none to give
+- When a migration stops, a message that says exactly what state things are in. The data load is one all-or-nothing transaction, so tables already read are shown as "copied - saved when every table is done" and, after a failure, as "rolled back - NOT saved"; a message claiming "tables 1 and 2 are done" would be false
+- A scan for text that is already damaged in the source (the replacement character, UTF-8 read as the wrong encoding such as `Ã©` for `é`, control characters), counted per column and reported as warnings, plus a check that both databases can hold any character
+- One command (`python start_demo.py`, or double-click `start_demo.bat`) that starts the containers, waits until both databases really answer, makes sure the AI works, and opens the page
+- Upload an Oracle SQL file on the web page and download the converted PostgreSQL files (see [Converting an uploaded Oracle script](#converting-an-uploaded-oracle-script))
+- A second sample database with a different shape (a medical clinic - see [Second sample](#second-sample-a-medical-clinic)), run end to end with one command
 - A standalone confidence/flagging report
 - A working REST API (FastAPI) and browser UI (Streamlit), with confirmed graceful failure handling when a database is unreachable
 
@@ -88,6 +94,9 @@ Worth stating plainly, since debugging real issues is the actual engineering wor
 9. **`SELECT ... INTO` is not the same in Postgres** — Oracle raises an error for zero or several rows; a plain Postgres `SELECT INTO` silently returns NULL or the first row, so an Oracle `NO_DATA_FOUND` handler never ran. Verified against a real Postgres, enforced in the prompt and the validator.
 10. **A stale copy blocking a good translation** — `CREATE OR REPLACE FUNCTION` refuses to change a return type, so an older installed version caused the validator to reject correct code. Found on the first real run; installs now replace by name inside one transaction.
 
+
+11. **A progress message that would have lied** — it is tempting to show "table 1 done, table 2 done" as the load runs, but the load is a single transaction: if table 3 fails, tables 1 and 2 are rolled back too. The page shows tables as "copied - saved when every table is done" and only "saved" after the commit, and the failure message was checked against what Postgres really held afterwards.
+12. **Asking the AI a question whose answer was thrown away** — a foreign-key column takes its type from the column it references, yet the AI was still asked about it first. Skipped now, which saves a slow, rate-limited call per such column.
 
 ## Getting set up
 
@@ -114,7 +123,7 @@ Copy `.env.example` to `.env` and fill in your database passwords (`.env` is git
 
 Data is read from Oracle in batches of 5,000 rows and written with PostgreSQL `COPY` (falling back to a slower, driver-adapted insert for any value type it does not recognise). Each table's row count is checked against what was read before anything is committed, and a failure anywhere rolls the whole load back.
 
-Measured on a laptop-class machine against PostgreSQL 16 with synthetic data (Postgres side only, source rows generated in memory): the previous row-by-row insert managed about 10,600 rows/s; `COPY` manages about 78,000-88,000 rows/s with a primary key, a unique index and a foreign key in place, using roughly 66 MB of memory regardless of table size (batches are streamed). That is about a million rows in 13 seconds. **Your real speed depends on Oracle's read speed, the network and the disk**, which that test cannot see. To measure it end to end on your own machine:
+Measured on a laptop-class machine against PostgreSQL 16 with synthetic data (Postgres side only, source rows generated in memory): the previous row-by-row insert managed about 10,600 rows/s; `COPY` manages about 73,000-88,000 rows/s with a primary key, a unique index and a foreign key in place (the text-damage scan described below costs about 6%), using roughly 66 MB of memory regardless of table size (batches are streamed). That is about a million rows in 14 seconds. **Your real speed depends on Oracle's read speed, the network and the disk**, which that test cannot see. To measure it end to end on your own machine:
 
 ```powershell
 python seed_oracle_volume.py 300000          # ~300k customers + ~700k orders in scratch tables
@@ -143,7 +152,7 @@ Each result is written to `translated_procedures/<name>.sql` with a header listi
 How a result is trusted, in order:
 1. **Oracle-construct scan** (`plsql_rules.py`): leftover `NVL`, `DECODE`, `SYSDATE`, `DUAL`, `ROWNUM`, `DBMS_OUTPUT`, `EXECUTE IMMEDIATE`, `SQL%ROWCOUNT`, Oracle exception names, `CURSOR c IS` and more. Several of these are *accepted* by Postgres when the function is created and only fail when it is called, so a parser alone is not enough. Every replacement the rules recommend was verified on a real PostgreSQL.
 2. **A real PostgreSQL parse**: `CREATE FUNCTION` runs inside a transaction that is rolled back, which catches syntax errors, unknown exception names, wrong `END` labels and bad types.
-3. **Feedback**: any problem found is sent back to the AI with the exact message, for up to three attempts.
+3. **Feedback**: any problem found is sent back to the AI with the exact message, for up to three attempts. Every retry lists *all* earlier problems and says to avoid them together, because fixing only the latest let the AI bring an earlier one back (it went round in a circle on a real run). A mistake that is mechanical and always wrong - `RETURNS void` on a function with `OUT` parameters - is corrected by the tool itself without another AI call, and the file header says `AUTO-CORRECTED`.
 4. Every `SELECT ... INTO` must be `INTO STRICT`: Oracle raises an error for zero or several rows, while plain Postgres silently returns NULL or the first row.
 
 What it deliberately does **not** do:
@@ -173,6 +182,40 @@ What it does not do, plainly:
 - **Date/times are compared within a tolerance** (5 seconds by default), since `SYSDATE` and `NOW()` are never the same instant.
 - **The two databases must hold the same data.** List your tables under `"tables"` and it warns when the row counts differ.
 - The Postgres side of this tool was tested against a real PostgreSQL. The Oracle side was tested against a stand-in that speaks the driver's API, so its first run on your Oracle is the real test of that half.
+
+### Second sample: a medical clinic
+
+The library example alone could hide a tool tuned to one schema. The clinic sample is deliberately different and uses features the library sample does not: a table that references itself, a composite primary key, a foreign key to a *text* key, a composite `UNIQUE`, `IN (...)` checks, string and `SYSTIMESTAMP` defaults, `ON DELETE CASCADE`, an identity column, a `CLOB`, `NUMBER(8,2)` prices, and patient names in several scripts (`José Müller`, `山田 花子`, `Søren Kierkegård`, an emoji in a note). Four stored procedures and functions (a cursor `FOR` loop, an `OUT` parameter, error handling, a date argument) come with comparison tests that include the error branches.
+
+Add `CLINIC_PASSWORD=...` to `.env` (the password of a throwaway local user), then:
+
+```powershell
+python run_clinic_demo.py          # Oracle schema CLINIC -> Postgres database clinic_db, end to end
+python run_clinic_demo.py --drop   # remove it again
+```
+
+It creates the sample in its own Oracle schema and its own Postgres database, so the library sample is never touched, then runs the same pipeline, translates and installs the procedures, compares each with its Oracle original, and runs the health check. Your `.env` is not changed: the two overriding settings apply only to the steps it runs.
+
+### Converting an uploaded Oracle script
+
+On the web page, choose **"An Oracle SQL file I upload"**, pick a `.sql` file, and click **Convert this file**. The file can contain tables, data and stored procedures; try `sample_schema.sql` or `sample_clinic_script.sql`.
+
+The migration reads real metadata from a live Oracle, so an uploaded script cannot be read directly. Instead:
+
+1. The script is run in a **brand-new, temporary Oracle schema** (`UPL_xxxxxxxx`) whose user can only create objects inside itself - never in `SYSTEM` or next to your other data. It is dropped again afterwards, even if something fails. Statements that fail (a `DROP` of something that does not exist, say) are listed but do not stop the script; SQL*Plus commands (`SET DEFINE OFF`, `PROMPT`, `@file`) are skipped and reported.
+2. The normal pipeline reads that schema and writes a new PostgreSQL database (`upload_xxxxxxxx`).
+3. You download **the migrated PostgreSQL file** (tables, data, id counters and the translated functions - load it anywhere with `psql -d yourdb -f the_file.sql`). Under "More downloads" there is also a `.zip` with `report.txt`, each translated procedure in `translated/`, and `script_load_log.txt` listing every statement that failed.
+
+The page shows the same live progress as a normal migration, plus the stored procedures as they are translated. If the conversion stops, it says exactly what state things are in; a failed conversion leaves no empty database or Oracle schema behind.
+
+Things to know:
+- **Only upload scripts you trust.** They execute inside your local Oracle (with the limited rights above).
+- **One upload at a time**, and Oracle, PostgreSQL and (for procedures) the AI provider must be running.
+- It needs a SQL *script*, not a binary Oracle export (`.dmp`): import those into Oracle with Oracle's own tools first.
+- Scripts that qualify names with another schema (`CREATE TABLE hr.employees`) will fail on permissions; remove the prefix. `CREATE USER`, `CONNECT` and `@other_file` are not supported.
+- The script is run one statement at a time, so a script with hundreds of thousands of `INSERT`s is slow; for that much data load it into your own Oracle and use the normal migration.
+- The temporary Oracle schema is removed, but each upload keeps its PostgreSQL database. List them with `docker exec pg-target psql -U postgres -c "\l"` and remove one with `DROP DATABASE upload_xxxxxxxx;`.
+- The step that runs your script inside a real Oracle was tested against a stand-in; the splitting of the script into statements, the pipeline, the cleanup and the downloaded file were tested for real.
 
 ### Choosing what to migrate
 
@@ -219,14 +262,20 @@ Load the sample schema (`sample_schema.sql`) against the Oracle container, using
 
 **Option A — via the UI (recommended):**
 
-Two terminals:
+```powershell
+python start_demo.py          # or double-click start_demo.bat
+```
+It starts the Oracle and Postgres containers, waits until both genuinely accept connections, checks the AI provider (starting Ollama if that is your provider), starts the API and the page, and opens `http://localhost:8501`. Click "Start Migration." Anything already running is reused; Ctrl+C stops what the script started. Server output goes to the `logs/` folder.
+
+When it finishes, the page offers **Download the migrated PostgreSQL file (.sql)**: the tables, the data, the id counters and, if you ticked the box, the translated procedures, as one script that loads anywhere with `psql -d yourdb -f the_file.sql`. An uploaded `mydb.sql` is saved as `mydb_postgresql.sql`; a live migration as `migrated_postgresql.sql`. Under "More downloads" are the report and a `.zip` of the file, the report and `translated/`. Tick *Also translate the stored procedures with the AI* to add the procedures (slower; two more steps).
+
+To start the two servers yourself instead, in two terminals:
 ```powershell
 uvicorn api:app
 ```
 ```powershell
 streamlit run streamlit_app.py
 ```
-Then open `http://localhost:8501` and click "Start Migration."
 
 Note: use `uvicorn api:app --reload` only while developing. With `--reload`, saving any file restarts the server and kills a migration that is running.
 
@@ -247,7 +296,15 @@ python compare_procedures.py   # compare each one with its Oracle original
 ```powershell
 python check_setup.py
 ```
-It reads and changes nothing, and prints a PASS / WARN / FAIL checklist with the fix next to every problem: configuration, the AI provider, both databases, that every table, row count, `UNIQUE` / foreign key / `CHECK` constraint and id sequence made it across, that the translated procedures are installed, and that the containers restart on their own. Use `--skip-ai` or `--skip-docker` to leave those out. On very large tables the row-count check runs `COUNT(*)` on both sides, which takes a while.
+It reads and changes nothing, and prints a PASS / WARN / FAIL checklist with the fix next to every problem: configuration, the AI provider, both databases, that both databases can hold any character, that every table, row count, `UNIQUE` / foreign key / `CHECK` constraint and id sequence made it across, that the translated procedures are installed, and that the containers restart on their own. Use `--skip-ai` or `--skip-docker` to leave those out. On very large tables the row-count check runs `COUNT(*)` on both sides, which takes a while.
+
+**Option D — convert single source files** (not a database): Java → Python, PHP → Node.js, MySQL schema → PostgreSQL.
+```powershell
+python convert_file.py samples\LegacyOrder.java
+python convert_file.py legacy_cart.php old_schema.sql
+python convert_file.py "samples\*.php" --out my_results
+```
+The file's *content* decides what it is (a PHP script saved as `.txt` is still PHP), the matching converter from `app/` does the work, and the result goes to the `converted/` folder; the original is never changed. Each converter checks the shape of its own output (valid Python; no SQL built by pasting strings together; balanced SQL statements) and starts the file with a WARNING if the check still fails after a retry. It needs only the AI provider, not Oracle, Postgres or Docker. Limits: the checks are about shape, not behaviour; the SQL converter is written for MySQL, not Oracle (use the main migration, or `plsql_translator.py --file` for Oracle procedures in a script); and the detector can mistake an Oracle DDL file or ordinary text containing the word SELECT for SQL. To add another kind of converter, write a plugin that implements `ModernizerPlugin` (`app/plugin_base.py`) and register it in `app/registry.py`.
 
 ## What's deliberately out of scope
 
@@ -258,4 +315,4 @@ Documented honestly rather than hidden:
 - **Source database performance-parameter migration** — this tool migrates schema, data, and logic. A source database's tuning (memory allocation, connection limits, etc.) is tied to its specific hardware and workload and doesn't transfer meaningfully to different target hardware — intentionally not attempted.
 - **Reported but not migrated:** ordinary indexes, views, triggers, packages and standalone sequences are listed in the report so nothing is lost silently, but they are not translated. Exotic column types (`XMLTYPE`, `INTERVAL`, spatial) are flagged for manual work, and circular foreign keys between tables are refused with a clear message.
 - **Proof of logical equivalence for stored procedures** — the checks catch known classes of mistakes and the differential checker compares behaviour for the calls you list, but neither can prove a translation equivalent for every input.
-- **Character set / encoding validation** — a known, common real-world migration risk (source/target character set mismatches can silently corrupt data) that this project's sample data didn't exercise. Worth checking explicitly in any real migration.
+- **Repairing damaged text** — the tool compares the two databases' character sets and counts text that already looks damaged (replacement characters, wrong-encoding patterns, control characters), but it cannot tell a deliberate odd value from corruption, and it does not repair anything. Worth checking explicitly in any real migration.

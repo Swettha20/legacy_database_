@@ -1,0 +1,29 @@
+{
+  "tables": ["departments", "doctors", "patients", "medicines", "appointments", "prescriptions"],
+  "time_tolerance_seconds": 5,
+  "cases": [
+    {"call": "doctor_load", "args": [2], "returns": "number", "note": "booked appointments for a doctor"},
+    {"call": "doctor_load", "args": [1], "returns": "number", "note": "a doctor with none booked"},
+    {"call": "doctor_load", "args": [99], "returns": "number", "note": "no such doctor"},
+
+    {"call": "appointment_total", "args": [1], "returns": "number", "note": "sums a cursor loop over prescriptions x prices"},
+    {"call": "appointment_total", "args": [3], "returns": "number"},
+    {"call": "appointment_total", "args": [99], "returns": "number", "note": "no rows: the loop never runs"},
+
+    {"call": "book_appointment", "args": [1, 1, {"date": "2026-10-20 09:00:00"}, {"out": "number"}],
+     "observe": ["SELECT id, patient_id, doctor_id, status FROM appointments ORDER BY id"],
+     "note": "a free slot: new id, and the column defaults (status 'BOOKED') must apply"},
+    {"call": "book_appointment", "args": [1, 2, {"date": "2026-10-06 11:00:00"}, {"out": "number"}],
+     "note": "doctor already booked: Oracle's own error message"},
+    {"call": "book_appointment", "args": [1, 1, {"date": "2026-10-08 09:00:00"}, {"out": "number"}],
+     "note": "a CANCELLED slot: passes the check, then the composite UNIQUE fires in both"},
+    {"call": "book_appointment", "args": [999, 1, {"date": "2026-10-21 09:00:00"}, {"out": "number"}],
+     "note": "unknown patient: the foreign key fires in both"},
+
+    {"call": "cancel_appointment", "args": [3],
+     "observe": ["SELECT id, status FROM appointments ORDER BY id", "SELECT sku, stock FROM medicines ORDER BY sku"],
+     "note": "cancels, and the loop puts the prescribed stock back"},
+    {"call": "cancel_appointment", "args": [1], "note": "already DONE: cannot be cancelled"},
+    {"call": "cancel_appointment", "args": [999], "note": "no such appointment"}
+  ]
+}

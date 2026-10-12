@@ -76,6 +76,25 @@ def connect_postgres():
                             dbname=PG_DBNAME, connect_timeout=5)
 
 
+def check_encoding(oracle_conn, pg_conn) -> Check:
+    """Text survives the trip only if both ends agree on how characters are stored."""
+    ocur, pcur = oracle_conn.cursor(), pg_conn.cursor()
+    ocur.execute("SELECT value FROM nls_database_parameters WHERE parameter = 'NLS_CHARACTERSET'")
+    oracle_charset = ocur.fetchone()[0]
+    pcur.execute("SHOW server_encoding")
+    pg_encoding = pcur.fetchone()[0]
+    pg_conn.rollback()
+    detail = f"Oracle {oracle_charset}, Postgres {pg_encoding}"
+    if pg_encoding.upper() != "UTF8":
+        return Check("FAIL", "database character sets", detail,
+                     "recreate the Postgres database with ENCODING 'UTF8' (CREATE DATABASE name ENCODING 'UTF8' TEMPLATE template0)")
+    if oracle_charset.upper() not in ("AL32UTF8", "UTF8"):
+        return Check("WARN", "database character sets", detail,
+                     "Oracle can only store characters in its own character set, so any '?' or odd text already in "
+                     "it is permanent damage; the migration counts suspicious text per column and lists it in the report")
+    return Check("PASS", "database character sets", detail + " (both can hold any character)")
+
+
 def check_tables_exist(oracle_names: list, pg_conn) -> Check:
     cur = pg_conn.cursor()
     cur.execute("SELECT table_name FROM information_schema.tables WHERE table_schema = current_schema()")
@@ -242,7 +261,8 @@ def run_checks(skip_ai: bool = False, skip_docker: bool = False) -> list:
         results.append(Check("SKIP", "tables found in the Oracle schema", "needs Oracle"))
 
     both = names is not None and pg_conn is not None
-    for title, fn in (("every Oracle table exists in Postgres", lambda: check_tables_exist(names, pg_conn)),
+    for title, fn in (("database character sets", lambda: check_encoding(oracle_conn, pg_conn)),
+                      ("every Oracle table exists in Postgres", lambda: check_tables_exist(names, pg_conn)),
                       ("row counts match", lambda: check_row_counts(oracle_conn, pg_conn, names)),
                       ("UNIQUE / foreign key / CHECK constraints are all in Postgres", lambda: check_constraints(oracle_conn, pg_conn, names)),
                       ("id sequences are ahead of the loaded data", lambda: check_sequences(pg_conn, names)),

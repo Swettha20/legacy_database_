@@ -99,8 +99,21 @@ def _is_out(arg) -> bool:
     return isinstance(arg, dict) and "out" in arg
 
 
+def decode_arg(arg):
+    """JSON cannot hold a date, so {"date": "2026-10-20 09:30:00"} stands for one."""
+    if isinstance(arg, dict) and "date" in arg:
+        return datetime.datetime.fromisoformat(arg["date"])
+    return arg
+
+
 def describe_call(case: dict) -> str:
-    shown = ", ".join("OUT" if _is_out(a) else repr(a) for a in case.get("args", []))
+    def show(a):
+        if _is_out(a):
+            return "OUT"
+        if isinstance(a, dict) and "date" in a:
+            return f"date({a['date']!r})"
+        return repr(a)
+    shown = ", ".join(show(a) for a in case.get("args", []))
     return f"{case['call']}({shown})"
 
 
@@ -197,7 +210,7 @@ class PostgresRunner:
         if not _NAME.match(name):
             raise ValueError(f"unsafe procedure name: {name!r}")
         args = case.get("args", [])
-        in_args = [a for a in args if not _is_out(a)]
+        in_args = [decode_arg(a) for a in args if not _is_out(a)]
         has_out = any(_is_out(a) for a in args)
         placeholders = ", ".join(["%s"] * len(in_args))
         outcome = Outcome()
@@ -228,8 +241,9 @@ class PostgresRunner:
 
 
 class OracleRunner:
-    def __init__(self, connection):
+    def __init__(self, connection, schema: str = None):
         self.conn = connection
+        self.schema = schema          # set when the code lives in a schema other than the login user's
 
     @staticmethod
     def _bind_type(kind: str):
@@ -268,9 +282,10 @@ class OracleRunner:
                 binds[key] = cur.var(self._bind_type(arg["out"]))
                 outs.append(key)
             else:
-                binds[key] = arg
+                binds[key] = decode_arg(arg)
             refs.append(f":{key}")
-        call = f"{name}({', '.join(refs)})"
+        qualified = f"{self.schema}.{name}" if self.schema else name
+        call = f"{qualified}({', '.join(refs)})"
         if "returns" in case:
             binds["ret"] = cur.var(self._bind_type(case["returns"]))
             block = f"BEGIN :ret := {call}; END;"
@@ -329,7 +344,7 @@ def run_cases(cases, oracle_runner, pg_runner, sources: dict, allow_commit: bool
     return results
 
 
-def compare_table_counts(oracle_conn, pg_conn, tables: list) -> list:
+def compare_table_counts(oracle_conn, pg_conn, tables: list, schema: str = None) -> list:
     """Warnings if the two databases do not hold the same number of rows -
     a comparison is meaningless if they started from different data."""
     warnings = []
@@ -337,7 +352,8 @@ def compare_table_counts(oracle_conn, pg_conn, tables: list) -> list:
     for table in tables:
         if not _NAME.match(table):
             continue
-        ocur.execute(f'SELECT COUNT(*) FROM "{table.upper()}"')
+        owner = f'"{schema}".' if schema else ""
+        ocur.execute(f'SELECT COUNT(*) FROM {owner}"{table.upper()}"')
         pcur.execute(f'SELECT COUNT(*) FROM "{table.lower()}"')
         o, p = ocur.fetchone()[0], pcur.fetchone()[0]
         if o != p:
@@ -380,8 +396,9 @@ def main(argv=None) -> int:
 
     try:
         import psycopg2
-        from config import PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DBNAME
+        from config import PG_HOST, PG_PORT, PG_USER, PG_PASSWORD, PG_DBNAME, ORACLE_USER, ORACLE_SCHEMA
         from read_schema import get_oracle_connection, read_source_objects
+        schema = ORACLE_SCHEMA if ORACLE_SCHEMA != ORACLE_USER.upper() else None
         sources = {o["name"].upper(): o["source"] for o in read_source_objects()}
         oracle_conn = get_oracle_connection()
         pg_conn = psycopg2.connect(host=PG_HOST, port=PG_PORT, user=PG_USER, password=PG_PASSWORD, dbname=PG_DBNAME)
@@ -391,10 +408,10 @@ def main(argv=None) -> int:
 
     try:
         if spec.get("tables"):
-            for warning in compare_table_counts(oracle_conn, pg_conn, spec["tables"]):
+            for warning in compare_table_counts(oracle_conn, pg_conn, spec["tables"], schema):
                 print(f"WARNING: the databases hold different data - {warning}")
         print(f"Comparing {len(cases)} calls (date/times may differ by up to {tolerance}s):\n")
-        results = run_cases(cases, OracleRunner(oracle_conn), PostgresRunner(pg_conn), sources,
+        results = run_cases(cases, OracleRunner(oracle_conn, schema), PostgresRunner(pg_conn), sources,
                             args.allow_commit, tolerance)
         print(format_report(results))
         return 1 if any(r.status in ("DIFFERENT", "ERROR") for r in results) else 0

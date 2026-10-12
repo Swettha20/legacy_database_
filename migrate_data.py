@@ -24,6 +24,7 @@ column types before it is written; see check_whole_numbers().
 import datetime
 import decimal
 import io
+import re
 import time
 
 import oracledb
@@ -77,13 +78,69 @@ def get_oracle_connection():
 
 
 def get_pg_connection():
-    return psycopg2.connect(
+    connection = psycopg2.connect(
         host=PG_HOST,
         port=PG_PORT,
         user=PG_USER,
         password=PG_PASSWORD,
         dbname=PG_DBNAME,
     )
+    # Be explicit: the text sent to COPY is UTF-8, whatever the database's own default is.
+    connection.set_client_encoding("UTF8")
+    return connection
+
+
+def _emit(progress, **event):
+    """Tell whoever is watching (the web page) what just happened. A broken
+    watcher must never be able to break a migration."""
+    if progress is None:
+        return
+    try:
+        progress(event)
+    except Exception:
+        pass
+
+
+# Text that is already damaged in the source. These are not errors - a column
+# may legitimately contain anything - but silent corruption is the worst kind,
+# so they are counted and reported, never ignored.
+_DAMAGE = [
+    ("replacement", re.compile("\ufffd"),
+     "the replacement character U+FFFD (text already damaged before it reached this tool)"),
+    ("mojibake", re.compile("\u00c3[\u0080-\u00bf\u0152\u0153\u0160\u0161\u0178\u017d\u017e\u0192\u02c6\u02dc\u2013-\u203a\u20ac\u2122]"
+                            "|\u00e2\u20ac[\u0080-\u00bf\u0152\u0153\u0160\u0161\u0178\u017d\u017e\u02c6\u02dc\u2013-\u203a\u20ac\u2122]"
+                            "|\u00c2[\u00a0-\u00bf]"),
+     "text that looks like UTF-8 read with the wrong encoding (for example 'Ã©' where 'é' was meant)"),
+    ("control", re.compile("[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]"), "control characters"),
+]
+_ANY_DAMAGE = re.compile("|".join(p.pattern for _, p, _ in _DAMAGE))
+
+
+class EncodingScanner:
+    """Counts suspicious text per column while a table streams through."""
+
+    def __init__(self, table_name: str, columns: list):
+        self.table, self.columns = table_name, columns
+        self.id_index = columns.index("id") if "id" in columns else None
+        self.found = {}          # (column, kind) -> [count, first row label]
+        self.seen = 0
+
+    def scan(self, batch: list):
+        for row in batch:
+            self.seen += 1
+            for i, value in enumerate(row):
+                if isinstance(value, str) and _ANY_DAMAGE.search(value):
+                    label = row[self.id_index] if self.id_index is not None else f"row {self.seen}"
+                    for kind, pattern, _ in _DAMAGE:
+                        if pattern.search(value):
+                            entry = self.found.setdefault((self.columns[i], kind), [0, label])
+                            entry[0] += 1
+
+    def warnings(self) -> list:
+        text = {kind: description for kind, _, description in _DAMAGE}
+        return [f"{self.table}.{column}: {count} value(s) contain {text[kind]} - first at "
+                f"{'id ' if isinstance(first, int) else ''}{first}"
+                for (column, kind), (count, first) in sorted(self.found.items())]
 
 
 class DataIntegrityError(RuntimeError):
@@ -223,7 +280,7 @@ def load_batch(pg_cursor, table_name: str, columns: list, batch: list):
         _insert_batch(pg_cursor, table_name, columns, batch)
 
 
-def migrate_table(oracle_cursor, pg_cursor, table_name: str, columns: list):
+def migrate_table(oracle_cursor, pg_cursor, table_name: str, columns: list, progress=None, warnings=None):
     oracle_column_list = ", ".join(f'"{c.upper()}"' for c in columns)
 
     # One network round trip per batch instead of one per 100 rows (the driver default).
@@ -237,14 +294,17 @@ def migrate_table(oracle_cursor, pg_cursor, table_name: str, columns: list):
     started = time.time()
     total_rows = 0
     next_progress = PROGRESS_EVERY_ROWS
+    scanner = EncodingScanner(table_name, columns)
     while True:
         batch = oracle_cursor.fetchmany(BATCH_SIZE)
         if not batch:
             break
 
         check_whole_numbers(table_name, columns, integer_columns, batch)
+        scanner.scan(batch)
         load_batch(pg_cursor, table_name, columns, batch)
         total_rows += len(batch)
+        _emit(progress, event="rows", table=table_name, rows=total_rows)
 
         if total_rows >= next_progress:      # a line per batch would be thousands of lines
             rate = total_rows / max(time.time() - started, 1e-9)
@@ -264,6 +324,12 @@ def migrate_table(oracle_cursor, pg_cursor, table_name: str, columns: list):
 
     elapsed = time.time() - started
     print(f"  {table_name}: {total_rows:,} rows migrated ({elapsed:.1f}s)")
+    for message in scanner.warnings():
+        print(f"  WARNING: {message}")
+        if warnings is not None:
+            warnings.append(message)
+        _emit(progress, event="warning", message=message)
+    _emit(progress, event="table_done", table=table_name, rows=total_rows, seconds=elapsed)
     return total_rows
 
 
@@ -293,7 +359,14 @@ def reset_pg_sequences(pg_cursor, table_name: str, columns: list):
         )
 
 
-def migrate_all_data():
+def migrate_all_data(progress=None):
+    """
+    Copies every table. `progress`, if given, is called with a small dict for
+    each thing that happens (plan, table_start, rows, table_done, committed,
+    warning) so a page can show live progress. Returns a summary dict.
+    """
+    started_all = time.time()
+    warnings, per_table = [], {}
     plan = get_migration_plan()
 
     oracle_conn = get_oracle_connection()
@@ -316,9 +389,14 @@ def migrate_all_data():
                 )
             columns = [c for c in entry["columns"] if c in target]
             for skipped in (c for c in entry["columns"] if c not in target):
-                print(f"  WARNING: {entry['name']}.{skipped} has no column in Postgres "
-                      f"(unmapped type) - its data is NOT migrated")
+                message = (f"{entry['name']}.{skipped} has no column in Postgres "
+                           f"(unmapped type) - its data is NOT migrated")
+                print(f"  WARNING: {message}")
+                warnings.append(message)
+                _emit(progress, event="warning", message=message)
             loadable.append((entry["name"], columns))
+
+        _emit(progress, event="plan", tables=[name for name, _ in loadable])
 
         truncate_tables(pg_cursor, [name for name, _ in loadable])
 
@@ -326,11 +404,15 @@ def migrate_all_data():
         # not row by row, so row order inside a table does not matter.
         pg_cursor.execute("SET CONSTRAINTS ALL DEFERRED")
 
-        for table_name, columns in loadable:
+        for index, (table_name, columns) in enumerate(loadable, 1):
             print(f"\n--- Migrating {table_name} ---")
-            migrate_table(oracle_cursor, pg_cursor, table_name, columns)
+            _emit(progress, event="table_start", table=table_name, index=index, total=len(loadable))
+            began = time.time()
+            rows = migrate_table(oracle_cursor, pg_cursor, table_name, columns, progress, warnings)
+            per_table[table_name] = {"rows": rows, "seconds": time.time() - began}
 
         pg_conn.commit()
+        _emit(progress, event="committed")
 
         for table_name, columns in loadable:
             reset_pg_sequences(pg_cursor, table_name, columns)
@@ -347,6 +429,8 @@ def migrate_all_data():
         pg_conn.commit()
 
         print("\nAll data migrated and sequences reset successfully.")
+        return {"tables": per_table, "total_rows": sum(t["rows"] for t in per_table.values()),
+                "seconds": time.time() - started_all, "warnings": warnings}
 
     except Exception:
         try:

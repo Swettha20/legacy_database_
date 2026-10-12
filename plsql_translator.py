@@ -268,10 +268,70 @@ def check_in_postgres(sql: str):
         conn.close()
 
 
+# --------------------------------------------------------- safe auto-repair
+
+
+def _matching_paren(text: str, open_index: int):
+    depth = 0
+    for i in range(open_index, len(text)):
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return i
+    return None
+
+
+def _split_top_level(text: str) -> list:
+    parts, depth, current = [], 0, ""
+    for ch in text:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append(current)
+            current = ""
+        else:
+            current += ch
+    return parts + [current]
+
+
+def repair_known_mistakes(code: str):
+    """
+    Fixes mistakes that are mechanical and always wrong, so they do not cost
+    another AI call (and another chance for the AI to reintroduce an earlier
+    problem - it did exactly that, going round in a circle, in a real run).
+
+    Only one so far: a function with OUT / INOUT parameters must not declare
+    RETURNS void (Postgres: "function result type must be integer because of
+    OUT parameters"). The OUT parameters ARE the result, so the clause is
+    simply removed. Returns (code, [description of each correction]).
+    """
+    header = re.search(r"CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+[^(]+\(", code, re.IGNORECASE)
+    if not header:
+        return code, []
+    close = _matching_paren(code, header.end() - 1)
+    if close is None:
+        return code, []
+    params = _split_top_level(code[header.end():close])
+    if not any(re.match(r"\s*(OUT|INOUT)\s", p, re.IGNORECASE) for p in params):
+        return code, []
+    tail_end = re.search(r"\bAS\b|\$\$|\bLANGUAGE\b", code[close:], re.IGNORECASE)
+    tail = code[close + 1: close + (tail_end.start() if tail_end else 0)]
+    fixed_tail = re.sub(r"\s*RETURNS\s+void\b", " ", tail, flags=re.IGNORECASE)
+    if fixed_tail == tail:
+        return code, []
+    repaired = code[:close + 1] + fixed_tail + code[close + 1 + len(tail):]
+    return repaired, ["removed 'RETURNS void': a function with OUT parameters cannot declare a return type "
+                      "(the OUT parameters are its result)"]
+
+
 # ----------------------------------------------------------------- prompt
 
 
-def build_prompt(plsql_code: str, retry: bool = False, error: str = "") -> str:
+def build_prompt(plsql_code: str, retry: bool = False, error: str = "", earlier: list = None) -> str:
     kind = "function" if re.match(r"\s*(CREATE\s+(OR\s+REPLACE\s+)?)?(EDITIONABLE\s+)?FUNCTION\b", plsql_code, re.I) else "procedure"
     base = (
         f"Convert the following Oracle PL/SQL stored {kind} to a PostgreSQL "
@@ -288,7 +348,10 @@ def build_prompt(plsql_code: str, retry: bool = False, error: str = "") -> str:
         "   $$ LANGUAGE plpgsql;\n"
         "   - An Oracle PROCEDURE without OUT parameters becomes RETURNS void.\n"
         "   - An Oracle FUNCTION becomes RETURNS followed by its converted RETURN type.\n"
-        "   - OUT / IN OUT parameters become OUT / INOUT parameters in the parameter list.\n"
+        "   - OUT / IN OUT parameters become OUT / INOUT parameters in the parameter list, and then there is "
+        "NO RETURNS clause at all - writing RETURNS void (or any type) next to an OUT parameter is an error. "
+        "Example for an Oracle procedure with one OUT parameter:\n"
+        "       CREATE OR REPLACE FUNCTION add_row(p_name VARCHAR, OUT p_id INTEGER) AS $$ ... $$ LANGUAGE plpgsql;\n"
         "   - Close with a plain END; (never END function_name;).\n"
         "   The LANGUAGE plpgsql; line at the very end, after the closing $$, is "
         "MANDATORY - the function is invalid without it.\n\n"
@@ -338,7 +401,17 @@ def build_prompt(plsql_code: str, retry: bool = False, error: str = "") -> str:
         "something: translate everything else and leave a comment at that point "
         "starting with -- MANUAL: describing what is missing.\n\n"
     )
-    if retry:
+    if retry and earlier and len(earlier) > 1:
+        # Fixing only the latest problem let the AI reintroduce an earlier one
+        # (it went round in a circle in a real run), so every problem found so
+        # far is listed and all must stay fixed.
+        listing = "\n".join(f"  {i}. {problem}" for i, problem in enumerate(earlier, 1))
+        base += (
+            "IMPORTANT: Your earlier attempts had these problems. Your answer must avoid ALL of them at once - "
+            "fixing one must not bring another back:\n" + listing + "\n"
+            "Keep everything else that was already correct.\n\n"
+        )
+    elif retry:
         base += (
             f"IMPORTANT: Your previous attempt had this specific problem: {error}\n"
             "Fix ONLY this issue while keeping everything else that was already correct.\n\n"
@@ -364,6 +437,7 @@ class TranslationResult:
     manual: list = field(default_factory=list)         # parts a person must finish
     advisories: list = field(default_factory=list)     # valid, but behaviour may differ
     pg_checked: bool = False
+    corrections: list = field(default_factory=list)    # mechanical fixes the tool made itself
 
     @property
     def needs_review(self) -> bool:
@@ -402,32 +476,38 @@ def translate_procedure_detailed(plsql_code: str, name: str = "", kind: str = "p
     manual = find_manual_constructs(plsql_code)
     advisories = find_advisories(plsql_code)
 
-    attempt, error, best = 0, "", None
+    attempt, error, best, history, corrections = 0, "", None, [], []
     while attempt < MAX_TRANSLATION_ATTEMPTS:
         attempt += 1
         label = "attempt 1" if attempt == 1 else f"retry {attempt - 1}"
         print(f"  [translate] Calling {provider_name()} ({label})...")
         try:
-            raw = _ask_with_retry(build_prompt(plsql_code, retry=attempt > 1, error=error))
+            raw = _ask_with_retry(build_prompt(plsql_code, retry=attempt > 1, error=error, earlier=history))
         except TranslationUnavailable as e:
             if best is None:
                 raise
             print(f"  [translate] Retry could not run: {e}")
             return TranslationResult(name, kind, _warning_header(error, attempt, provider_name()) + best,
-                                     False, attempt - 1, [error], manual, advisories)
-        cleaned = clean_code_output(raw)
+                                     False, attempt - 1, [error], manual, advisories, corrections=corrections)
+        cleaned, fixes = repair_known_mistakes(clean_code_output(raw))
+        for fix in fixes:
+            print(f"  [translate] Auto-corrected: {fix}")
+            if fix not in corrections:
+                corrections.append(fix)
         ok, problem, pg_checked = _validate(cleaned, plsql_code, check_postgres)
         if ok:
             print(f"  [translate] {'Attempt 1' if attempt == 1 else 'Retry'} is structurally valid"
                   f"{' and accepted by Postgres' if pg_checked else ''}.")
-            return TranslationResult(name, kind, cleaned, True, attempt, [], manual, advisories, pg_checked)
+            return TranslationResult(name, kind, cleaned, True, attempt, [], manual, advisories, pg_checked, corrections)
         print(f"  [translate] Attempt {attempt} invalid ({problem})"
               f"{', retrying...' if attempt < MAX_TRANSLATION_ATTEMPTS else ''}")
         best, error = cleaned, problem
+        if problem not in history:
+            history.append(problem)
 
     print("  [translate] Still invalid after retry, returning with warning.")
     return TranslationResult(name, kind, _warning_header(error, attempt) + best, False, attempt,
-                             [error], manual, advisories)
+                             [error], manual, advisories, corrections=corrections)
 
 
 def translate_procedure(plsql_code: str) -> str:
@@ -457,6 +537,8 @@ def _result_file_text(result: TranslationResult) -> str:
     lines = [f"-- Translated from Oracle {result.kind.upper()} {result.name} by legacy-db-modernizer",
              f"-- Status: {'OK' if result.ok else 'NEEDS FIXING - see WARNING below'}"
              + ("" if result.pg_checked else "  (not parsed by Postgres)")]
+    for note in result.corrections:
+        lines.append(f"-- AUTO-CORRECTED: {note}")
     for note in result.manual:
         lines.append(f"-- MANUAL WORK NEEDED: {note}")
     for note in result.advisories:

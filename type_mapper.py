@@ -177,8 +177,19 @@ def map_schema(ir: dict) -> dict:
     table_mappings = {}
     for table in ir["tables"]:
         column_map = {}
+        fk_columns_here = {c for fk in table["foreign_keys"] for c in fk_columns(fk)[0]}
         for col in table["columns"]:
-            column_map[col["name"]] = map_column_type(table["name"], col)
+            if (col["name"] in fk_columns_here and col["type"] == "NUMBER" and not col.get("is_auto_increment")
+                    and map_declared_number(col.get("precision"), col.get("scale")) is None):
+                # Pass 2 gives a foreign key column the exact type of the column it
+                # references, so whatever the AI said here would be thrown away.
+                # Skipping the call saves a slow, rate-limited request per such column.
+                column_map[col["name"]] = {
+                    "pg_type": "NUMERIC", "confidence": "needs_review",
+                    "note": "provisional - replaced by the type of the column this foreign key references",
+                }
+            else:
+                column_map[col["name"]] = map_column_type(table["name"], col)
         table_mappings[table["name"]] = column_map
 
         primary_key_types[table["name"]] = {
