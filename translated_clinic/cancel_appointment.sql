@@ -5,7 +5,7 @@
 CREATE OR REPLACE FUNCTION cancel_appointment(p_id INTEGER)
 RETURNS void AS $$
 DECLARE
-    v_rowcount INTEGER;
+    rowcount INTEGER;
     rx RECORD;
 BEGIN
     UPDATE appointments
@@ -13,9 +13,9 @@ BEGIN
      WHERE id = p_id
        AND status = 'BOOKED';
 
-    GET DIAGNOSTICS v_rowcount = ROW_COUNT;
+    GET DIAGNOSTICS rowcount = ROW_COUNT;
 
-    IF v_rowcount = 0 THEN
+    IF rowcount = 0 THEN
         RAISE EXCEPTION 'Appointment % cannot be cancelled', p_id;
     END IF;
 

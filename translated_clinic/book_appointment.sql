@@ -1,12 +1,8 @@
 -- Translated from Oracle PROCEDURE BOOK_APPOINTMENT by legacy-db-modernizer
--- Status: NEEDS FIXING - see WARNING below  (not parsed by Postgres)
+-- Status: OK
 -- REVIEW: String concatenation: Oracle treats NULL as an empty string in || ('a' || NULL = 'a'); Postgres returns NULL. Use concat(a, b) or COALESCE where an operand can be NULL.
 
--- WARNING: This PL/pgSQL failed validation even after 3 attempts
--- (Postgres rejected the function: function result type must be integer because of OUT parameters. A function with OUT parameters must NOT declare RETURNS void (or any other type): leave the RETURNS clause out entirely.). It may be incomplete or malformed.
--- Please review manually before running against a database.
-
-CREATE OR REPLACE FUNCTION book_appointment(p_patient_id INTEGER, p_doctor_id INTEGER, p_when TIMESTAMP, OUT p_id INTEGER) RETURNS void AS $$
+CREATE OR REPLACE FUNCTION book_appointment(p_patient_id INTEGER, p_doctor_id INTEGER, p_when TIMESTAMP, OUT p_id INTEGER) AS $$
 DECLARE
     v_busy INTEGER;
 BEGIN
