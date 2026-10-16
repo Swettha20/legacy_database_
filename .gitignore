@@ -15,3 +15,10 @@ converted/
 
 # written by the web page's upload feature
 uploads/
+
+# generated files (recreate them; see generated_data/README.md)
+generated_data/large_oracle_store.sql
+schema_ir.json
+mapped_schema.json
+migration_report.txt
+translated_procedures/

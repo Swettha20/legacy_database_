@@ -1,4 +1,0 @@
-<?php
-$conn = mysqli_connect("localhost", "root", "", "shop");
-$result = mysqli_query($conn, "SELECT * FROM products WHERE price > 100");
-?>

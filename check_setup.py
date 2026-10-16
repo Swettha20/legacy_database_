@@ -47,7 +47,7 @@ def check_config() -> Check:
                      f"schema {config.ORACLE_SCHEMA}, Postgres database {config.PG_DBNAME}")
     except Exception as e:
         return Check("FAIL", "configuration (.env) loads", _first_line(e),
-                     "create a .env file next to the scripts (copy .env.example) and fill in the passwords")
+                     "run start_all, which creates the private .env.stack settings, or set ORACLE_PASSWORD and PG_PASSWORD")
 
 
 def check_ai() -> Check:

@@ -2,7 +2,7 @@
 legacy-db-modernizer: shared AI provider layer
 
 One place that knows how to talk to an AI model. Every script that needs
-AI (type advice, PL/SQL translation, the plugin system under app/) calls
+AI (type advice, PL/SQL translation) calls
 ask_llm() instead of talking to Ollama directly, so switching provider is
 a .env change, not a code change.
 
@@ -17,9 +17,8 @@ is exactly what it was before this module existed. Switching to Groq is
 opt-in, and switching back is one line.
 
 Why this reads env vars itself instead of importing config.py: config.py
-refuses to load without Oracle/Postgres passwords, but the plugin system
-under app/ (Java/PHP/SQL converters) has no database and shouldn't need
-one just to call an AI model. Same .env file, same variable names.
+refuses to load without Oracle/Postgres passwords, and checking the AI
+provider should not need a database. Same variable names either way.
 
 Contract: ask_llm() makes ONE attempt and raises
 requests.exceptions.RequestException on any network/HTTP/format failure,

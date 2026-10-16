@@ -1,6 +1,12 @@
 # Large Oracle upload sample
 
-Upload **large_oracle_store.sql** in the moderniser website's Oracle SQL upload mode.
+The script itself is not stored in git (it is generated, and identical every time). Create it first:
+
+```powershell
+python generated_data/generate_large_oracle.py
+```
+
+Then upload **large_oracle_store.sql** in the moderniser website's Oracle SQL upload mode.
 
 - Approximately 22.7 MB (21.68 MiB), below the backend's 25 MiB upload limit.
 - 207,120 synthetic records across 10 online-store tables.
