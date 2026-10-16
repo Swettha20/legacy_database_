@@ -160,6 +160,10 @@ def main(argv=None, launcher=None) -> int:
     parser.add_argument("--wait", type=float, default=180, help="seconds to wait for Oracle (default 180)")
     args = parser.parse_args(argv)
 
+    from env_check import check_or_explain
+    if not check_or_explain():
+        return 1
+
     from check_setup import check_config
     print("Starting the demo (Ctrl+C stops what this script starts):\n")
 

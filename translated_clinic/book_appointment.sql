@@ -2,7 +2,8 @@
 -- Status: OK
 -- REVIEW: String concatenation: Oracle treats NULL as an empty string in || ('a' || NULL = 'a'); Postgres returns NULL. Use concat(a, b) or COALESCE where an operand can be NULL.
 
-CREATE OR REPLACE FUNCTION book_appointment(p_patient_id INTEGER, p_doctor_id INTEGER, p_when TIMESTAMP, OUT p_id INTEGER) AS $$
+CREATE OR REPLACE FUNCTION book_appointment(p_patient_id INTEGER, p_doctor_id INTEGER, p_when TIMESTAMP, OUT p_id INTEGER)
+AS $$
 DECLARE
     v_busy INTEGER;
 BEGIN

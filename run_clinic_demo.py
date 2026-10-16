@@ -26,6 +26,10 @@ CLINIC_ENV = {"ORACLE_SCHEMA": "CLINIC", "PG_DBNAME": "clinic_db"}
 PY = sys.executable
 
 # (title, command or callable, show its output, stop here if it fails)
+# Steps that show their output print it LIVE, line by line, so a slow step never looks frozen.
+SLOW_NOTE = {"Translate and install the stored procedures":
+             "asks the AI about each procedure - about a minute or two; the free tier sometimes makes it wait",
+             "Compare each procedure with its Oracle original": "runs every test call on both databases"}
 STEPS = [
     ("Create the clinic sample in Oracle (schema CLINIC)", [PY, "load_clinic_sample.py"], True, True),
     ("Create the Postgres database clinic_db", "create_pg_database", False, True),
@@ -43,6 +47,7 @@ def child_env() -> dict:
     env = dict(os.environ)
     env.pop("ORACLE_TABLES", None)          # discover the clinic's tables, do not inherit a library list
     env.update(CLINIC_ENV)
+    env.update(PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8")   # a piped child would otherwise hold its output back
     return env
 
 
@@ -71,48 +76,87 @@ def create_pg_database(drop: bool = False) -> str:
         conn.close()
 
 
-def run_step(command, show: bool, run=subprocess.run):
-    """(ok, output). Output is shown only when asked for, or when the step fails."""
+def run_streaming(command, show: bool, echo=print):
+    """Runs a child process, printing its output live (when `show`). Returns (ok, all_output)."""
+    proc = subprocess.Popen(command, env=child_env(), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                            text=True, encoding="utf-8", errors="replace")
+    lines = []
+    try:
+        for line in proc.stdout:
+            lines.append(line)
+            if show and line.strip():
+                echo("   " + line.rstrip())
+        code = proc.wait()
+    except BaseException:                    # Ctrl+C included: never leave the child running behind us
+        proc.terminate()
+        try:
+            proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+        raise
+    return code == 0, "".join(lines)
+
+
+def run_step(command, show: bool, run=None, echo=print):
+    """(ok, output, already_shown). `run` is only for tests; normally output streams live."""
     if command == "create_pg_database":
         try:
-            return True, create_pg_database()
+            return True, create_pg_database(), False
         except Exception as e:
-            return False, str(e)
+            return False, str(e), False
+    if run is None:
+        ok, output = run_streaming(command, show, echo)
+        return ok, output, show
     done = run(command, env=child_env(), capture_output=True, text=True)
-    return done.returncode == 0, (done.stdout or "") + (done.stderr or "")
+    return done.returncode == 0, (done.stdout or "") + (done.stderr or ""), False
 
 
-def main(argv=None, run=subprocess.run) -> int:
+def main(argv=None, run=None) -> int:
     parser = argparse.ArgumentParser(description="Run the second (clinic) sample end to end.")
     parser.add_argument("--drop", action="store_true", help="remove the clinic sample again")
     args = parser.parse_args(argv)
 
+    from env_check import check_or_explain
+    if not check_or_explain():
+        return 1
+
     if args.drop:
         print("Removing the clinic sample:")
-        done = run([PY, "load_clinic_sample.py", "--drop"], env=child_env(), capture_output=True, text=True)
+        if run is not None:
+            done = run([PY, "load_clinic_sample.py", "--drop"], env=child_env(), capture_output=True, text=True)
+        else:
+            done = subprocess.run([PY, "load_clinic_sample.py", "--drop"], env=child_env(), capture_output=True,
+                                  text=True, encoding="utf-8", errors="replace")
         print(done.stdout.rstrip() or "  (nothing printed)")
         print(f"  Postgres database clinic_db: {create_pg_database(drop=True)}")
         return 0 if done.returncode == 0 else 1
 
     print("Running the clinic sample through the whole pipeline (Oracle schema CLINIC -> Postgres clinic_db):\n")
     failed_soft = []
-    for number, (title, command, show, hard) in enumerate(STEPS, 1):
-        print(f"{number}. {title}")
-        started = time.time()
-        ok, output = run_step(command, show, run)
-        took = f"{time.time() - started:.1f}s"
-        if ok:
-            print(f"   ✓ done ({took})")
-            if show and output.strip():
-                print("\n".join("   " + line for line in output.rstrip().splitlines()))
-        else:
-            print(f"   ✗ FAILED ({took})")
-            print("\n".join("   " + line for line in output.rstrip().splitlines()[-25:]))
-            if hard:
-                print("\nStopped here: the later steps need this one. Fix the problem above and run the command again "
-                      "(it is safe to repeat).")
-                return 1
-            failed_soft.append(title)
+    number = 0
+    try:
+        for number, (title, command, show, hard) in enumerate(STEPS, 1):
+            print(f"{number}. {title}" + (f"  ({SLOW_NOTE[title]})" if title in SLOW_NOTE else ""), flush=True)
+            started = time.time()
+            ok, output, shown = run_step(command, show, run)
+            took = f"{time.time() - started:.1f}s"
+            if ok:
+                print(f"   ✓ done ({took})")
+                if show and not shown and output.strip():
+                    print("\n".join("   " + line for line in output.rstrip().splitlines()))
+            else:
+                print(f"   ✗ FAILED ({took})")
+                if not shown:
+                    print("\n".join("   " + line for line in output.rstrip().splitlines()[-25:]))
+                if hard:
+                    print("\nStopped here: the later steps need this one. Fix the problem above and run the command "
+                          "again (it is safe to repeat).")
+                    return 1
+                failed_soft.append(title)
+    except KeyboardInterrupt:
+        print(f"\n\nStopped by you (Ctrl+C) during step {number}. Nothing is broken: running the command again "
+              f"rebuilds everything from scratch.")
+        return 130
     print("\n" + ("Everything in the clinic sample ran and checked out." if not failed_soft else
                   "Finished, but these steps reported problems: " + "; ".join(failed_soft)))
     print("Clean up with:  python run_clinic_demo.py --drop")
