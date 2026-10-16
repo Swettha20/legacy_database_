@@ -8,4 +8,4 @@ Flow: upload or configured source → inspect → review mappings → approve �
 
 `web_server.py` serves the frontend and proxies same-origin `/api` traffic, session cookies, bearer headers, SSE and file ranges to FastAPI. Request bodies spool to disk above 1 MiB; downloads stream. Database credentials stay in the worker/provisioner. No tokens/passwords are saved in browser storage; only the last job UUID is remembered.
 
-The backend uses PostgreSQL metadata and Redis/Celery. Business logic stays on the API/worker side. See `UPGRADE_STATUS.md` for supported objects, tests, retention and limitations. The older Streamlit/legacy API modules are development references; they are not the default production service.
+The backend uses PostgreSQL metadata and Redis/Celery. Business logic stays on the API/worker side. See `UPGRADE_STATUS.md` for supported objects, tests, retention and limitations.

@@ -16,7 +16,7 @@ Sign in as **admin**, using **STACK_ADMIN_PASSWORD** in the generated private `.
 
 Upload a trusted Oracle script, or choose an authorised configured source. Click **Inspect my database**, review mappings and omissions, then **Approve and migrate**. The worker creates a separate target database, copies data, checks every supported value and approved structure, exports SQL, restores it into another empty database and checks again. Download the original, converted SQL, verification, reports or ZIP.
 
-History and downloads survive API restarts. Worker crashes become interrupted/recoverable jobs; retry uses a fresh target. Previous targets are retained. The legacy standalone development commands have different guarantees; use these Docker entry points for the upgraded service.
+History and downloads survive API restarts. Worker crashes become interrupted/recoverable jobs; retry uses a fresh target. Previous targets are retained.
 
 ## Commands
 
