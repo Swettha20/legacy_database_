@@ -183,6 +183,10 @@ What it does not do, plainly:
 - **The two databases must hold the same data.** List your tables under `"tables"` and it warns when the row counts differ.
 - The Postgres side of this tool was tested against a real PostgreSQL. The Oracle side was tested against a stand-in that speaks the driver's API, so its first run on your Oracle is the real test of that half.
 
+Each call is reported the moment it finishes (`[3/13] book_appointment(...)  ->  SAME  (0.4s)`), and every call has a 30-second limit on both databases. A call that hits the limit is reported as an ERROR with its reason and the usual cause - another program or window holding a lock on the same tables - and is never counted as the procedure's own behaviour.
+
+Each case runs on its own new Oracle connection, closed afterwards. On a real run, the tenth call stalled when it followed nine others on one shared connection, yet ran instantly alone and after just one other case - so no state is shared between cases (`--reuse-connection` brings the old behaviour back for diagnosis). To investigate one call, `python compare_procedures.py --list` numbers the cases and `--only 7` (or `7,10`, or `3-5`) runs just those; the progress lines keep the original numbers.
+
 ### Second sample: a medical clinic
 
 The library example alone could hide a tool tuned to one schema. The clinic sample is deliberately different and uses features the library sample does not: a table that references itself, a composite primary key, a foreign key to a *text* key, a composite `UNIQUE`, `IN (...)` checks, string and `SYSTIMESTAMP` defaults, `ON DELETE CASCADE`, an identity column, a `CLOB`, `NUMBER(8,2)` prices, and patient names in several scripts (`José Müller`, `山田 花子`, `Søren Kierkegård`, an emoji in a note). Four stored procedures and functions (a cursor `FOR` loop, an `OUT` parameter, error handling, a date argument) come with comparison tests that include the error branches.

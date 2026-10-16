@@ -49,6 +49,7 @@ import datetime
 import decimal
 import json
 import re
+import time
 import sys
 from dataclasses import dataclass, field
 
@@ -93,6 +94,7 @@ class CaseResult:
     detail: str = ""
     oracle: Outcome = None
     postgres: Outcome = None
+    retried: bool = False                   # the first attempt timed out and a second one was made
 
 
 def _is_out(arg) -> bool:
@@ -225,15 +227,24 @@ class PostgresRunner:
                 row = cur.fetchone()
                 if "returns" in case:
                     outcome.value = row[0]
-            for entry in case.get("observe", []):
-                cur.execute(_observe_sql(entry, "postgres"))
-                outcome.observations.append(cur.fetchall())
         except psycopg2.Error as e:
+            if is_timeout(e):
+                raise                          # the database was stuck; that says nothing about the procedure
             outcome.error = {
                 "class": e.pgcode,
                 "message": (e.diag.message_primary if e.diag and e.diag.message_primary else str(e)).strip(),
                 "native": f"SQLSTATE {e.pgcode}",
             }
+        else:
+            for entry in case.get("observe", []):
+                sql = _observe_sql(entry, "postgres")
+                try:
+                    cur.execute(sql)
+                    outcome.observations.append(cur.fetchall())
+                except psycopg2.Error as e:
+                    if is_timeout(e):
+                        raise
+                    raise observation_failed(e, sql)
         finally:
             self.conn.rollback()
         outcome.notices = [n.replace("NOTICE:", "", 1).strip() for n in self.conn.notices]
@@ -300,48 +311,176 @@ class OracleRunner:
                 outcome.value = binds["ret"].getvalue()
             outcome.outs = [binds[k].getvalue() for k in outs]
             outcome.notices = self._drain_output(cur)
-            for entry in case.get("observe", []):
-                cur.execute(_observe_sql(entry, "oracle"))
-                outcome.observations.append(cur.fetchall())
         except oracledb.DatabaseError as e:
+            if is_timeout(e):
+                raise                          # the database was stuck; that says nothing about the procedure
             outcome.error = self.parse_error(e)
             try:
                 outcome.notices = self._drain_output(cur)
             except oracledb.DatabaseError:
                 pass
+        else:
+            for entry in case.get("observe", []):
+                sql = _observe_sql(entry, "oracle")
+                try:
+                    cur.execute(sql)
+                    outcome.observations.append(cur.fetchall())
+                except oracledb.DatabaseError as e:
+                    if is_timeout(e):
+                        raise
+                    raise observation_failed(e, sql)
         finally:
             self.conn.rollback()
+            try:
+                cur.close()                    # an unclosed cursor stays alive on the connection
+            except Exception:
+                pass
         return outcome
+
+
+class FreshConnectionOracleRunner:
+    """
+    Runs every case on its own brand-new Oracle connection, closed afterwards.
+
+    Why: on a real run, the tenth call stalled when it followed nine others on one
+    shared connection, yet the very same call ran instantly alone and after just one
+    other case. Something built up in the shared connection (the driver's statement
+    cache and open cursors, or the session). A new connection per case means no
+    state can carry from one case to the next. It costs a fraction of a second each.
+    """
+
+    def __init__(self, connect, schema: str = None, timeout_seconds: int = None):
+        self.connect, self.schema, self.timeout_seconds = connect, schema, timeout_seconds
+
+    def run(self, case: dict) -> Outcome:
+        conn = self.connect()
+        try:
+            conn.call_timeout = (self.timeout_seconds or CALL_TIMEOUT_SECONDS) * 1000
+            if self.schema:
+                use_oracle_schema(conn, self.schema)
+            return OracleRunner(conn, self.schema).run(case)
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
+
+
+def choose_oracle_runner(reuse_connection: bool, oracle_conn, schema, connect):
+    return OracleRunner(oracle_conn, schema) if reuse_connection else FreshConnectionOracleRunner(connect, schema)
 
 
 # --------------------------------------------------------- orchestration
 
 
-def run_cases(cases, oracle_runner, pg_runner, sources: dict, allow_commit: bool, tolerance: float) -> list:
-    """sources maps UPPERCASE procedure name -> its Oracle source text."""
+CALL_TIMEOUT_SECONDS = 30       # one call on either database may not take longer than this
+
+# SQLSTATEs that mean "the database could not run it in time" - not something the procedure did.
+PG_TIMEOUT_STATES = ("57014", "55P03")          # query_canceled (statement_timeout), lock_not_available
+
+
+class ObservationError(RuntimeError):
+    """An observe query failed. That is a problem with the test or the connection, NOT something
+    the procedure did, so it must never be recorded as the procedure's behaviour."""
+
+
+def observation_failed(error: Exception, sql: str) -> ObservationError:
+    text = str(error).strip().splitlines()[0] if str(error).strip() else type(error).__name__
+    return ObservationError(f"an observe query failed ({text}); the query was: {' '.join(sql.split())[:120]}")
+
+
+_SCHEMA_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9_$#]{0,29}$")
+
+
+def use_oracle_schema(connection, schema: str):
+    """Make unqualified table names in observe queries mean the sample's schema, not the login user's."""
+    if not _SCHEMA_NAME.match(schema or ""):
+        raise ValueError(f"unsafe schema name: {schema!r}")
+    cur = connection.cursor()
+    try:
+        cur.execute(f"ALTER SESSION SET CURRENT_SCHEMA = {schema}")
+    finally:
+        cur.close()
+
+
+def is_timeout(error: Exception) -> bool:
+    try:
+        import psycopg2.errors as pg_errors
+        if isinstance(error, (pg_errors.QueryCanceled, pg_errors.LockNotAvailable)):
+            return True
+    except ImportError:
+        pass
+    text = str(error).lower()
+    return (getattr(error, "pgcode", None) in PG_TIMEOUT_STATES
+            or any(w in text for w in ("dpy-4024", "ora-01013", "call timeout")))
+
+TIMEOUT_HINT = ("it took longer than the limit - most likely another program or window is holding a lock on the "
+                "same tables (a SQL tool left connected, or an earlier run that was not closed), or the machine is "
+                "overloaded. Close other connections to these databases and run it again")
+
+
+def explain_error(error: Exception) -> str:
+    text = str(error).strip().splitlines()[0] if str(error).strip() else type(error).__name__
+    lowered = text.lower()
+    if any(w in lowered for w in ("timeout", "timed out", "canceling statement", "dpy-4024", "ora-01013")):
+        return f"{text} ({TIMEOUT_HINT})"
+    return text
+
+
+def run_cases(cases, oracle_runner, pg_runner, sources: dict, allow_commit: bool, tolerance: float,
+              progress=None, say=None, retry_timeouts: bool = True) -> list:
+    """sources maps UPPERCASE procedure name -> its Oracle source text.
+    `progress`, if given, is called as progress(number, total, result, seconds) after each case."""
     from plsql_rules import code_only
     results = []
+    total = len(cases)
     for case in cases:
+        started = time.time()
         name = case["call"].upper()
         source = sources.get(name)
         if source is None:
             results.append(CaseResult(case, "ERROR", detail=f"{name} was not found in the Oracle schema"))
+            _report(progress, results, total, started)
             continue
         body = code_only(source)
         if not allow_commit and re.search(r"\bCOMMIT\b|\bAUTONOMOUS_TRANSACTION\b", body):
             results.append(CaseResult(case, "SKIPPED", detail=(
                 "the Oracle original COMMITs, which cannot be rolled back, so running it would change "
                 "your Oracle data - re-run with --allow-commit to run it for real (then re-migrate)")))
+            _report(progress, results, total, started)
             continue
-        try:
-            oracle, postgres = oracle_runner.run(case), pg_runner.run(case)
-        except Exception as e:
-            results.append(CaseResult(case, "ERROR", detail=f"could not run the call: {e}"))
-            continue
-        differences = compare_outcomes(case, oracle, postgres, tolerance)
-        results.append(CaseResult(case, "DIFFERENT" if differences else "SAME", differences,
-                                  oracle=oracle, postgres=postgres))
+        oracle, postgres, retried, error = _run_with_retry(case, oracle_runner, pg_runner, retry_timeouts, say)
+        if error is not None:
+            results.append(CaseResult(case, "ERROR", detail=f"could not run the call: {explain_error(error)}",
+                                      retried=retried))
+        else:
+            differences = compare_outcomes(case, oracle, postgres, tolerance)
+            results.append(CaseResult(case, "DIFFERENT" if differences else "SAME", differences,
+                                      oracle=oracle, postgres=postgres, retried=retried))
+        _report(progress, results, total, started)
     return results
+
+
+def _run_with_retry(case, oracle_runner, pg_runner, retry: bool, say):
+    """(oracle, postgres, retried, error). `error` is set only if the call could not be run.
+    A timeout is retried once: every case is rolled back, so running it again is safe, and a
+    one-off stall then costs 30 seconds while the case still completes."""
+    retried = False
+    while True:
+        try:
+            return oracle_runner.run(case), pg_runner.run(case), retried, None
+        except Exception as e:
+            if is_timeout(e) and retry and not retried:
+                retried = True
+                if say:
+                    say(f"  ... {describe_call(case)} timed out after {CALL_TIMEOUT_SECONDS}s - trying once more")
+                continue
+            return None, None, retried, e
+
+
+def _report(progress, results: list, total: int, started: float):
+    if progress:
+        progress(len(results), total, results[-1], time.time() - started)
 
 
 def compare_table_counts(oracle_conn, pg_conn, tables: list, schema: str = None) -> list:
@@ -362,12 +501,25 @@ def compare_table_counts(oracle_conn, pg_conn, tables: list, schema: str = None)
     return warnings
 
 
+def print_progress(number: int, total: int, result, seconds: float):
+    """One line per call, the moment it finishes, so a slow or stuck call is visible."""
+    extra = ", needed a second try" if result.retried else ""
+    print(f"  [{number}/{total}] {describe_call(result.case)}  ->  {result.status}  ({seconds:.1f}s{extra})", flush=True)
+
+
+def numbered_progress(numbers: list, total: int):
+    """Progress lines carry the case's number in the test file, so `--only 7` still says [7/13]."""
+    return lambda n, _t, result, seconds: print_progress(numbers[n - 1], total, result, seconds)
+
+
 def format_report(results: list) -> str:
     lines = []
     for r in results:
         lines.append(f"  {r.status:10} {describe_call(r.case)}" + (f"   # {r.case['note']}" if r.case.get("note") else ""))
         if r.detail:
             lines.append(f"             {r.detail}")
+        if r.retried and r.status in ("SAME", "DIFFERENT"):
+            lines.append(f"             (the first attempt timed out and the second one worked - worth knowing: something stalled once)")
         for d in r.differences:
             lines.append(f"             - {d}")
     counts = {s: sum(1 for r in results if r.status == s) for s in ("SAME", "DIFFERENT", "SKIPPED", "ERROR")}
@@ -377,12 +529,31 @@ def format_report(results: list) -> str:
     return "\n".join(lines)
 
 
+def parse_only(text: str, total: int) -> list:
+    """'7' or '7,10' or '3-5' -> [7] / [7, 10] / [3, 4, 5] (1-based, in the order of the test file)."""
+    chosen = []
+    for part in text.split(","):
+        part = part.strip()
+        low, dash, high = part.partition("-")
+        if not (low.strip().isdigit() and (not dash or high.strip().isdigit())):
+            raise ValueError(f"'{part}' is not a case number (use e.g. 7, or 7,10, or 3-5)")
+        first, last = int(low), int(high) if dash else int(low)
+        if first < 1 or last > total or first > last:
+            raise ValueError(f"'{part}' is outside 1-{total}: this test file has {total} cases")
+        chosen.extend(n for n in range(first, last + 1) if n not in chosen)
+    return chosen
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description="Compare Oracle procedures with their Postgres translations.")
     parser.add_argument("--tests", default="procedure_tests.json")
     parser.add_argument("--allow-commit", action="store_true",
                         help="also run Oracle originals that COMMIT (their changes cannot be rolled back)")
     parser.add_argument("--tolerance", type=float, help="seconds two date/times may differ by")
+    parser.add_argument("--only", help="run only these cases, by number: 7, or 7,10, or 3-5 (see --list)")
+    parser.add_argument("--list", action="store_true", help="show the numbered cases and exit")
+    parser.add_argument("--reuse-connection", action="store_true",
+                        help="run all Oracle calls on ONE connection (the old behaviour; for diagnosis)")
     args = parser.parse_args(argv)
 
     try:
@@ -392,6 +563,19 @@ def main(argv=None) -> int:
         print(f"ERROR: could not read {args.tests} - {e}")
         return 1
     cases = spec.get("cases", [])
+    if args.list:
+        for number, case in enumerate(cases, 1):
+            print(f"{number:>3}. {describe_call(case)}" + (f"   - {case['note']}" if case.get("note") else ""))
+        return 0
+    numbers = list(range(1, len(cases) + 1))
+    if args.only:
+        try:
+            numbers = parse_only(args.only, len(cases))
+        except ValueError as e:
+            print(f"ERROR: {e}")
+            return 2
+    total_cases = len(cases)
+    cases = [cases[n - 1] for n in numbers]
     tolerance = args.tolerance if args.tolerance is not None else spec.get("time_tolerance_seconds", DEFAULT_TOLERANCE_SECONDS)
 
     try:
@@ -401,7 +585,12 @@ def main(argv=None) -> int:
         schema = ORACLE_SCHEMA if ORACLE_SCHEMA != ORACLE_USER.upper() else None
         sources = {o["name"].upper(): o["source"] for o in read_source_objects()}
         oracle_conn = get_oracle_connection()
-        pg_conn = psycopg2.connect(host=PG_HOST, port=PG_PORT, user=PG_USER, password=PG_PASSWORD, dbname=PG_DBNAME)
+        oracle_conn.call_timeout = CALL_TIMEOUT_SECONDS * 1000
+        if schema:
+            use_oracle_schema(oracle_conn, schema)
+        pg_conn = psycopg2.connect(host=PG_HOST, port=PG_PORT, user=PG_USER, password=PG_PASSWORD, dbname=PG_DBNAME,
+                                   options=f"-c statement_timeout={CALL_TIMEOUT_SECONDS * 1000} "
+                                           f"-c lock_timeout={CALL_TIMEOUT_SECONDS * 1000}")
     except Exception as e:
         print(f"ERROR: could not connect to both databases - {e}")
         return 1
@@ -410,9 +599,13 @@ def main(argv=None) -> int:
         if spec.get("tables"):
             for warning in compare_table_counts(oracle_conn, pg_conn, spec["tables"], schema):
                 print(f"WARNING: the databases hold different data - {warning}")
-        print(f"Comparing {len(cases)} calls (date/times may differ by up to {tolerance}s):\n")
-        results = run_cases(cases, OracleRunner(oracle_conn, schema), PostgresRunner(pg_conn), sources,
-                            args.allow_commit, tolerance)
+        print(f"Comparing {len(cases)} call{'s' if len(cases) != 1 else ''} "
+              f"(date/times may differ by up to {tolerance}s):\n")
+        results = run_cases(cases, choose_oracle_runner(args.reuse_connection, oracle_conn, schema, get_oracle_connection),
+                            PostgresRunner(pg_conn), sources,
+                            args.allow_commit, tolerance,
+                            progress=numbered_progress(numbers, total_cases), say=print)
+        print()
         print(format_report(results))
         return 1 if any(r.status in ("DIFFERENT", "ERROR") for r in results) else 0
     finally:
