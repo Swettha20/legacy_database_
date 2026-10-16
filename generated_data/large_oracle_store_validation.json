@@ -1,0 +1,29 @@
+{
+  "status": "PASS",
+  "database": "Oracle",
+  "tables": {
+    "categories": 20,
+    "suppliers": 100,
+    "customers": 15000,
+    "products": 4000,
+    "addresses": 20000,
+    "orders": 40000,
+    "order_items": 80000,
+    "payments": 24000,
+    "shipments": 16000,
+    "reviews": 8000
+  },
+  "total_rows": 207120,
+  "statements_executed": 4167,
+  "failed_statements": 0,
+  "compile_errors": 0,
+  "business_checks": [
+    "order_totals",
+    "payment_totals",
+    "address_owners",
+    "payment_status",
+    "shipment_status"
+  ],
+  "routines_executed": 4,
+  "scope": "Oracle source fixture validation; PostgreSQL migration and AI translation not run"
+}

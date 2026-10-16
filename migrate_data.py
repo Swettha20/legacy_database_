@@ -12,8 +12,7 @@ rolls back cleanly). This makes the script a full, safe re-migration each
 time it's run - not an incremental/delta sync, which is a different,
 larger feature intentionally out of scope here.
 
-UPDATE (volume): rows are now written with PostgreSQL COPY (about 8x faster than
-row-by-row INSERT, measured), with a fallback for unfamiliar value types, a row-count
+UPDATE (volume): rows are now written with PostgreSQL COPY, with a fallback for unfamiliar value types, a row-count
 check per table, throttled progress output, and ANALYZE after loading.
 
 UPDATE (data guard): a fraction inserted into an INTEGER column is silently
@@ -22,6 +21,7 @@ column types before it is written; see check_whole_numbers().
 """
 
 import datetime
+import os
 import decimal
 import io
 import re
@@ -37,7 +37,7 @@ from config import (
 from build_ir import build_ir
 from read_schema import read_schema
 
-BATCH_SIZE = 5000
+BATCH_SIZE = max(100, min(20000, int(os.getenv("MIGRATION_BATCH_SIZE", "5000"))))
 PROGRESS_EVERY_ROWS = 100_000
 
 
@@ -68,12 +68,16 @@ def _lobs_as_plain_values(cursor, metadata):
 
 
 def get_oracle_connection():
+    oracledb.defaults.fetch_decimals = True
     connection = oracledb.connect(
         user=ORACLE_USER,
         password=ORACLE_PASSWORD,
         dsn=ORACLE_DSN,
     )
     connection.outputtypehandler = _lobs_as_plain_values
+    connection.call_timeout = 120000
+    with connection.cursor() as cursor:
+        cursor.execute("ALTER SESSION SET TIME_ZONE='+00:00'")
     return connection
 
 
@@ -263,7 +267,7 @@ def _insert_batch(pg_cursor, table_name: str, columns: list, batch: list):
 
 
 def _copy_batch(pg_cursor, table_name: str, columns: list, batch: list):
-    """The fast path: PostgreSQL COPY, about 8x faster than row-by-row INSERT."""
+    """PostgreSQL COPY for values supported by the bounded CSV encoder."""
     column_list = ", ".join(f'"{c}"' for c in columns)
     text = "".join(",".join(_copy_field(v) for v in row) + "\n" for row in batch)
     pg_cursor.copy_expert(
@@ -274,7 +278,7 @@ def _copy_batch(pg_cursor, table_name: str, columns: list, batch: list):
 
 def load_batch(pg_cursor, table_name: str, columns: list, batch: list):
     seen = {type(v) for row in batch for v in row}
-    if all(issubclass(t, _COPY_SAFE_TYPES) for t in seen):
+    if os.getenv('MIGRATION_LOAD_METHOD','copy') == 'copy' and all(issubclass(t, _COPY_SAFE_TYPES) for t in seen):
         _copy_batch(pg_cursor, table_name, columns, batch)
     else:
         _insert_batch(pg_cursor, table_name, columns, batch)
@@ -287,6 +291,7 @@ def migrate_table(oracle_cursor, pg_cursor, table_name: str, columns: list, prog
     oracle_cursor.arraysize = BATCH_SIZE
     oracle_cursor.execute(
         f'SELECT {oracle_column_list} FROM "{ORACLE_SCHEMA}"."{table_name.upper()}"'
+        + (' AS OF SCN ' + str(int(os.environ['ORACLE_SNAPSHOT_SCN'])) if os.getenv('ORACLE_SNAPSHOT_SCN') else '')
     )
 
     integer_columns = get_integer_columns(pg_cursor, table_name)

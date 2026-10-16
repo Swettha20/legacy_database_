@@ -84,6 +84,8 @@ def _settings() -> dict:
 def provider_name() -> str:
     """Human-readable provider + model, for log lines and error notes."""
     s = _settings()
+    if s['provider'] == 'none':
+        return 'Disabled (rules only)'
     if s["provider"] == "groq":
         return f"Groq ({s['groq_model']})"
     return f"Ollama ({s['ollama_model']})"
@@ -151,6 +153,8 @@ def _ask_groq(s: dict, prompt: str, timeout: float) -> str:
 def ask_llm(prompt: str, timeout: float = None) -> str:
     """Send a prompt to the configured provider; return the text reply."""
     s = _settings()
+    if s['provider'] == 'none':
+        raise LLMConfigError('AI is disabled. Schema/data migration uses exact rules; enable Groq or Ollama for optional routine translation.')
     if timeout is None:
         if s["timeout"]:
             timeout = float(s["timeout"])

@@ -1,0 +1,22 @@
+{
+  "commit": "6660bad68c07bd143430ace58565b3f727e17263",
+  "counts": {
+    "CHANNELS": 5,
+    "COSTS": 82112,
+    "COUNTRIES": 35,
+    "CUSTOMERS": 55500,
+    "PRODUCTS": 72,
+    "PROMOTIONS": 503,
+    "SALES": 918843,
+    "TIMES": 1826,
+    "SUPPLEMENTARY_DEMOGRAPHICS": 4500
+  },
+  "total_rows": 1063396,
+  "source_segment_bytes": 279642112,
+  "adaptations": [
+    "Interactive ACCEPT prompts supplied as DEFINE values.",
+    "Oracle Free slim lacks Oracle Text: SUP_TEXT_IDX omitted; base data unchanged; remaining official statements executed separately."
+  ],
+  "official_installer_completed": false,
+  "base_table_counts_passed": true
+}

@@ -1,0 +1,12 @@
+{
+  "database": "moderniser_recovery_db7dcf6b4e324dd9",
+  "artifact_root": "/app/uploads/recovery_db7dcf6b4e324dd9",
+  "records": 194,
+  "verified": true,
+  "artifacts_checked": 164,
+  "original_uploads_checked": 7,
+  "restored_api_login": true,
+  "restored_history": true,
+  "restored_artifact_download": true,
+  "restored_original_download": true
+}

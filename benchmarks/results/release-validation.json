@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-16",
+  "scope": "Local Docker; trusted inputs",
+  "deployed_source_hashes_match": true,
+  "source_sha256": {
+    "api.py": "258f0e4670456742492744a1aee7ed9f67149d268121d02f7b37dc20ea8ff6bb",
+    "web_server.py": "3e1834c0821a0bb2781e683e14ddec77646aba58cf2eea168e344c24e3519ef3",
+    "migrate_data.py": "2b18cf69d65461a264d961ab2a098d496dff6887872d2b8c0db620034596d0b4",
+    "read_schema.py": "082fc60f4fe0ae18132b3353ab291846d2e6340e9238a63fcbb4070cee179cd4",
+    "type_mapper.py": "9bf9e25ec8c6657373374c438d661932b4ba6d50124caf2b0b91230494920e43",
+    "upload_pipeline.py": "2d57c84369a38411244113c19d0974b98fc8b25dcc9f7d14b2505b595a61862e",
+    "frontend/index.html": "49a20c78b9f9d854ab96964f6c702669f2d8eede998b707a6ce20caf8485a235",
+    "moderniser/backup.py": "9a9b63a747096175214ce95a1bd03bf450a6df2d0ae25c6ce7cd2a590f00af5a",
+    "moderniser/engine.py": "da2ff9caef1171588b56cc5f8e01405622df958d78062d3e75fe9e71ac229ae5",
+    "moderniser/objects.py": "c31e12256786c45db4393905756d9354a3e42b074462e3c9110c0e8d2edbdc92",
+    "moderniser/provision.py": "ee4d4c6192276c124751816fdea00edeac0a0e0bfe3b14d8a1a35e14b7bd04f8",
+    "moderniser/queue.py": "271e1a80e6122fda85c0b587b94a8efacc227bad17d4779f482c1fbd71e937c5",
+    "moderniser/service.py": "908850136a16e30ec9b540f33d49050bf811a9b593e5e05bbb0576e56b901c9e",
+    "moderniser/store.py": "e41522b57a4f29594eb4de5bb7c321dbe9faab1ab931188b707df2002dc0316b",
+    "moderniser/verify.py": "ea214ecc1f3b54a95f04210e8813317284fcd7892b0fabaeaf09c72ad8497bdd",
+    "moderniser/worker.py": "b6ef0cf03e4e28f7eb47864d0903fb46a5ddb9120539cced64308b0700affd04",
+    "moderniser/__init__.py": "b25ccfb8587f55b9155df10f87a004b0863b5cf087a5e7aef5cbb080b2fad37d"
+  },
+  "readiness": {
+    "status": "ready",
+    "checks": [
+      {
+        "service": "Metadata",
+        "status": "PASS"
+      },
+      {
+        "service": "Queue",
+        "status": "PASS"
+      },
+      {
+        "service": "Worker",
+        "status": "PASS"
+      },
+      {
+        "status": "PASS",
+        "service": "Oracle"
+      },
+      {
+        "status": "PASS",
+        "service": "PostgreSQL"
+      }
+    ]
+  },
+  "website_status": 200,
+  "unit_tests_passed": 18,
+  "http_acceptance_checks_passed": 20,
+  "recovery_checks_passed": 12,
+  "routine_checker_cases_passed": 7,
+  "public_benchmark_runs_passed": 8,
+  "clean_deployment": "benchmarks/results/clean-deployment.json",
+  "backup_restore": "benchmarks/results/backup-restore.json",
+  "backup_utilities": "pg_dump (PostgreSQL) 16.15 (Debian 16.15-1.pgdg13+2)",
+  "host_os_install_tested": false,
+  "remote_deployment_tested": false
+}

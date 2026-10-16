@@ -2,6 +2,10 @@ venv/
 __pycache__/
 *.pyc
 .env
+.env.stack
+.env.stack.*
+!.env.stack.example
+.runtime/
 
 # written by start_demo.py
 logs/

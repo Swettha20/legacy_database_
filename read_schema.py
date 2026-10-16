@@ -52,6 +52,7 @@ def discover_tables(cursor):
               AND object_name NOT LIKE 'RUPD$%'
               AND object_name NOT LIKE 'SYS_IOT_OVER_%'
               AND object_name NOT LIKE 'SYS_EXPORT_%'
+              AND object_name NOT IN (SELECT mview_name FROM all_mviews WHERE owner=:owner)
             ORDER BY object_name
             """,
             owner=ORACLE_SCHEMA,

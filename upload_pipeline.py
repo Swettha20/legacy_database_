@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from oracle_script import split_script
 
 EVENT_MARK = "@@EVENT@@ "
-SCHEMA_PATTERN = re.compile(r"^UPL_[0-9A-F]{8}$")
+SCHEMA_PATTERN = re.compile(r"^UPL_[0-9A-F]{8,24}$")
 GRANTS = ("CREATE SESSION, CREATE TABLE, CREATE VIEW, CREATE SEQUENCE, CREATE PROCEDURE, "
           "CREATE TRIGGER, CREATE TYPE, CREATE SYNONYM")
 MAX_ERRORS_SHOWN = 10
@@ -80,6 +80,7 @@ def create_scratch_schema(admin_connection, schema: str, password: str):
     try:
         cur.execute(f'CREATE USER {schema} IDENTIFIED BY "{password}" QUOTA UNLIMITED ON USERS')
         cur.execute(f"GRANT {GRANTS} TO {schema}")
+        cur.execute(f"GRANT EXECUTE ON SYS.DBMS_FLASHBACK TO {schema}")
     finally:
         cur.close()
 
@@ -96,7 +97,7 @@ def drop_scratch_schema(admin_connection, schema: str):
         cur.close()
 
 
-def run_script(user_connection, script_text: str, progress=None) -> LoadResult:
+def run_script(user_connection, script_text: str, progress=None, strict=True) -> LoadResult:
     """
     Runs every statement of the script, continuing after a failure (as SQL*Plus
     does: a DROP of something that does not exist should not stop a script), and
@@ -104,6 +105,8 @@ def run_script(user_connection, script_text: str, progress=None) -> LoadResult:
     """
     statements, skipped = split_script(script_text)
     result = LoadResult(skipped=skipped)
+    if strict and any(re.match(r'(?i)^\s*(@|START\b|CONNECT\b|CONN\b|DEFINE\b|VARIABLE\b|VAR\b|HOST\b)', line) for line in skipped):
+        raise ScriptError('This script depends on SQLcl/SQL*Plus includes, variables or connections. Use its official installer and migrate the installed schema.',result)
     if not statements:
         raise ScriptError("The file contains no SQL statements.")
     cur = user_connection.cursor()
@@ -114,6 +117,9 @@ def run_script(user_connection, script_text: str, progress=None) -> LoadResult:
                 result.executed += 1
             except Exception as e:                                   # one bad statement must not stop the rest
                 result.failed.append({"line": statement.line, "kind": statement.kind, "message": _first_line(e)})
+                if strict:
+                    user_connection.rollback()
+                    raise ScriptError(f"Stopped at line {statement.line}: {_first_line(e)}", result) from e
             if progress and (index % 200 == 0 or index == len(statements)):
                 progress(index, len(statements))
         user_connection.commit()
@@ -121,6 +127,8 @@ def run_script(user_connection, script_text: str, progress=None) -> LoadResult:
         result.tables = cur.fetchone()[0]
         cur.execute("SELECT name, line, text FROM user_errors ORDER BY name, sequence")
         result.compile_errors = [f"{n} line {l}: {_first_line(t)}" for n, l, t in cur.fetchall()]
+        if strict and result.compile_errors:
+            raise ScriptError("Oracle compilation failed: " + result.compile_errors[0], result)
     finally:
         cur.close()
     if result.tables == 0:
@@ -135,7 +143,7 @@ def run_script(user_connection, script_text: str, progress=None) -> LoadResult:
 def create_pg_database(name: str):
     import psycopg2
     from config import PG_HOST, PG_PORT, PG_USER, PG_PASSWORD
-    if not re.fullmatch(r"upload_[0-9a-f]{8}", name):
+    if not re.fullmatch(r"upload_[0-9a-f]{8,33}", name):
         raise ValueError(f"refusing to create database {name!r}")
     conn = psycopg2.connect(host=PG_HOST, port=PG_PORT, user=PG_USER, password=PG_PASSWORD, dbname="postgres")
     conn.autocommit = True
@@ -149,7 +157,7 @@ def create_pg_database(name: str):
 def drop_pg_database(name: str):
     import psycopg2
     from config import PG_HOST, PG_PORT, PG_USER, PG_PASSWORD
-    if not re.fullmatch(r"upload_[0-9a-f]{8}", name):
+    if not re.fullmatch(r"upload_[0-9a-f]{8,33}", name):
         raise ValueError(f"refusing to drop database {name!r}")
     conn = psycopg2.connect(host=PG_HOST, port=PG_PORT, user=PG_USER, password=PG_PASSWORD, dbname="postgres")
     conn.autocommit = True
@@ -193,6 +201,9 @@ def export_dump(pg_conn, mapped: dict, function_sql: list, path: str):
                     out.write(f"SELECT setval(pg_get_serial_sequence('{t}', '{column}'), "
                               f'GREATEST(COALESCE((SELECT MAX("{column}") FROM {t}), 0), 1), '
                               f"EXISTS (SELECT 1 FROM {t}));\n")
+        from moderniser.objects import statements
+        for statement in statements(mapped):
+            out.write('\n'+statement+'\n')
         for sql in function_sql:
             out.write("\n" + sql.strip().rstrip(";") + ";\n")
         out.write("\nCOMMIT;\n")
@@ -227,7 +238,8 @@ def translate_procedures(job_dir: str, emit) -> list:
         except (TranslationUnavailable, LLMConfigError) as e:
             emit(event="warning", message=f"Stored procedures were not translated: {e}")
             break
-        with open(os.path.join(out_dir, obj["name"].lower() + ".sql"), "w", encoding="utf-8") as f:
+        safe_name = re.sub(r'[^a-zA-Z0-9_.-]', '_', obj['name']).lower()
+        with open(os.path.join(out_dir, safe_name + ".sql"), "w", encoding="utf-8") as f:
             f.write(_result_file_text(result))
         installed = False
         if result.ok and result.pg_checked and not result.manual:

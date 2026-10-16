@@ -1,0 +1,337 @@
+{
+  "checks": [
+    {
+      "name": "private jobs require login",
+      "passed": true
+    },
+    {
+      "name": "upload checksum preserves original bytes",
+      "passed": true
+    },
+    {
+      "name": "original download byte identity",
+      "passed": true
+    },
+    {
+      "name": "inspection precedes target creation",
+      "passed": true
+    },
+    {
+      "name": "unsafe override rejected",
+      "passed": true
+    },
+    {
+      "name": "repeated request creates one job",
+      "passed": true
+    },
+    {
+      "name": "exact decimals Unicode binary nulls and duplicates survive",
+      "passed": true
+    },
+    {
+      "name": "export restored and fully checked",
+      "passed": true
+    },
+    {
+      "name": "approved structure verified",
+      "passed": true
+    },
+    {
+      "name": "downloaded artifact checksum",
+      "passed": true
+    },
+    {
+      "name": "download range retries preserve bytes",
+      "passed": true
+    },
+    {
+      "name": "bundle contains untouched original",
+      "passed": true
+    },
+    {
+      "name": "persistent event IDs support reconnect",
+      "passed": true
+    },
+    {
+      "name": "owner isolation jobs",
+      "passed": true
+    },
+    {
+      "name": "owner isolation uploads",
+      "passed": true
+    },
+    {
+      "name": "owner isolation artifacts",
+      "passed": true
+    },
+    {
+      "name": "ordinary users cannot create accounts",
+      "passed": true
+    },
+    {
+      "name": "failed source statement stops migration",
+      "passed": true
+    },
+    {
+      "name": "failure still exposes original",
+      "passed": true
+    },
+    {
+      "name": "failed job preserves previous artifact",
+      "passed": true
+    }
+  ],
+  "successful_job": "a5bca709-0b07-4b55-9a96-3ed6d76ebc77",
+  "failed_job": "1fba308f-d834-46ec-a085-2fbd630cbeaf",
+  "verification": {
+    "scope": "All supported table values, duplicate multiplicities, nulls and numeric aggregates. Routines/manual objects are not certified.",
+    "passed": true,
+    "tables": {
+      "exact_values": {
+        "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+        "passed": true,
+        "source": {
+          "rows": 2,
+          "nulls": [
+            0,
+            1,
+            1,
+            1,
+            1
+          ],
+          "numeric_max": [
+            "2",
+            "123456789012345678901234567890.12345678",
+            null,
+            null,
+            null
+          ],
+          "numeric_min": [
+            "1",
+            "123456789012345678901234567890.12345678",
+            null,
+            null,
+            null
+          ],
+          "numeric_totals": [
+            "3",
+            "123456789012345678901234567890.12345678",
+            "0",
+            "0",
+            "0"
+          ]
+        },
+        "target": {
+          "rows": 2,
+          "nulls": [
+            0,
+            1,
+            1,
+            1,
+            1
+          ],
+          "numeric_max": [
+            "2",
+            "123456789012345678901234567890.12345678",
+            null,
+            null,
+            null
+          ],
+          "numeric_min": [
+            "1",
+            "123456789012345678901234567890.12345678",
+            null,
+            null,
+            null
+          ],
+          "numeric_totals": [
+            "3",
+            "123456789012345678901234567890.12345678",
+            "0",
+            "0",
+            "0"
+          ]
+        },
+        "unmatched_rows": 0
+      },
+      "duplicate_values": {
+        "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+        "passed": true,
+        "source": {
+          "rows": 2,
+          "nulls": [
+            0,
+            0
+          ],
+          "numeric_max": [
+            "7",
+            null
+          ],
+          "numeric_min": [
+            "7",
+            null
+          ],
+          "numeric_totals": [
+            "14",
+            "0"
+          ]
+        },
+        "target": {
+          "rows": 2,
+          "nulls": [
+            0,
+            0
+          ],
+          "numeric_max": [
+            "7",
+            null
+          ],
+          "numeric_min": [
+            "7",
+            null
+          ],
+          "numeric_totals": [
+            "14",
+            "0"
+          ]
+        },
+        "unmatched_rows": 0
+      }
+    },
+    "structure": {
+      "scope": "Approved types, nullability, PK, UNIQUE, CHECK, FK, ordinary index and supported view definitions",
+      "passed": true,
+      "columns_match": true,
+      "view_definitions_match": true,
+      "index_definitions_match": true,
+      "constraint_definitions_match": true
+    },
+    "procedures": {
+      "scope": "No behavioural test cases were supplied.",
+      "status": "not_tested"
+    },
+    "export_restore": {
+      "passed": true,
+      "tables": {
+        "exact_values": {
+          "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+          "passed": true,
+          "source": {
+            "rows": 2,
+            "nulls": [
+              0,
+              1,
+              1,
+              1,
+              1
+            ],
+            "numeric_max": [
+              "2",
+              "123456789012345678901234567890.12345678",
+              null,
+              null,
+              null
+            ],
+            "numeric_min": [
+              "1",
+              "123456789012345678901234567890.12345678",
+              null,
+              null,
+              null
+            ],
+            "numeric_totals": [
+              "3",
+              "123456789012345678901234567890.12345678",
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          "target": {
+            "rows": 2,
+            "nulls": [
+              0,
+              1,
+              1,
+              1,
+              1
+            ],
+            "numeric_max": [
+              "2",
+              "123456789012345678901234567890.12345678",
+              null,
+              null,
+              null
+            ],
+            "numeric_min": [
+              "1",
+              "123456789012345678901234567890.12345678",
+              null,
+              null,
+              null
+            ],
+            "numeric_totals": [
+              "3",
+              "123456789012345678901234567890.12345678",
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          "unmatched_rows": 0
+        },
+        "duplicate_values": {
+          "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+          "passed": true,
+          "source": {
+            "rows": 2,
+            "nulls": [
+              0,
+              0
+            ],
+            "numeric_max": [
+              "7",
+              null
+            ],
+            "numeric_min": [
+              "7",
+              null
+            ],
+            "numeric_totals": [
+              "14",
+              "0"
+            ]
+          },
+          "target": {
+            "rows": 2,
+            "nulls": [
+              0,
+              0
+            ],
+            "numeric_max": [
+              "7",
+              null
+            ],
+            "numeric_min": [
+              "7",
+              null
+            ],
+            "numeric_totals": [
+              "14",
+              "0"
+            ]
+          },
+          "unmatched_rows": 0
+        }
+      },
+      "structure": {
+        "scope": "Approved types, nullability, PK, UNIQUE, CHECK, FK, ordinary index and supported view definitions",
+        "passed": true,
+        "columns_match": true,
+        "view_definitions_match": true,
+        "index_definitions_match": true,
+        "constraint_definitions_match": true
+      }
+    }
+  }
+}

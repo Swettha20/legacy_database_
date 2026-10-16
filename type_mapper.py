@@ -16,6 +16,7 @@ History of fixes, kept here since each one taught something real:
 """
 
 import json
+import os
 from ai_type_advisor import suggest_type_for_ambiguous_column
 from constraints import translate_default, translate_check, fk_columns
 import re
@@ -123,6 +124,9 @@ def map_column_type(table_name: str, column: dict) -> dict:
     is_auto_increment = column["is_auto_increment"]
 
     if is_auto_increment:
+        if os.getenv("CONSERVATIVE_TYPES") == "1" and column.get("precision") is None:
+            return {"pg_type": "NUMERIC", "confidence": "needs_review",
+                    "note": "Unbounded Oracle identity: exact numeric values retained; recreate the identity generator manually."}
         # A 32-bit SERIAL overflows past ~2.1 billion; if the Oracle column
         # DECLARES more than 9 digits, a 64-bit BIGSERIAL is required.
         if (column.get("precision") or 0) > 9:
@@ -150,6 +154,9 @@ def map_column_type(table_name: str, column: dict) -> dict:
         declared = map_declared_number(column.get("precision"), column.get("scale"))
         if declared is not None:
             return declared
+        if os.getenv("CONSERVATIVE_TYPES") == "1":
+            return {"pg_type": "NUMERIC", "confidence": "high",
+                    "note": "No declared precision: exact unconstrained NUMERIC; no AI guess."}
         # Ambiguous case (bare NUMBER, nothing declared) - ask the AI advisor for a more informed guess
         # than a blind NUMERIC default. Still flagged needs_review either way.
         print(f"  Asking AI advisor for {table_name}.{column['name']}...")

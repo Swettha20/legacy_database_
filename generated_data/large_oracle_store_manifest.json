@@ -1,0 +1,21 @@
+{
+  "file": "large_oracle_store.sql",
+  "bytes": 22736301,
+  "megabytes": 21.68,
+  "total_rows": 207120,
+  "tables": {
+    "categories": 20,
+    "suppliers": 100,
+    "customers": 15000,
+    "products": 4000,
+    "addresses": 20000,
+    "orders": 40000,
+    "order_items": 80000,
+    "payments": 24000,
+    "shipments": 16000,
+    "reviews": 8000
+  },
+  "routines": 4,
+  "sha256": "08668f91816f7f0cabfb62a25c352bc39b4519ffba5d4278845ade4971cf34db",
+  "synthetic": true
+}

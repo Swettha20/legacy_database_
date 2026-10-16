@@ -1,0 +1,153 @@
+name: ${STACK_PROJECT_NAME:-legacy-moderniser}
+
+x-app: &app
+  image: ${STACK_PROJECT_NAME:-legacy-moderniser}-app:local
+  build: .
+  environment: &app-env
+    ORACLE_USER: system
+    ORACLE_PASSWORD: ${STACK_ORACLE_PASSWORD:?Run start_all first}
+    ORACLE_DSN: oracle:1521/FREEPDB1
+    ORACLE_SCHEMA: DEMO
+    ORACLE_TABLES: ""
+    DEMO_PASSWORD: ${STACK_DEMO_PASSWORD:?Run start_all first}
+    PG_HOST: postgres
+    PG_PORT: "5432"
+    PG_USER: postgres
+    PG_PASSWORD: ${STACK_PG_PASSWORD:?Run start_all first}
+    PG_DBNAME: modernized_db
+    LLM_PROVIDER: ${STACK_AI_PROVIDER:-none}
+    OLLAMA_URL: http://ollama:11434/api/generate
+    OLLAMA_MODEL: ${STACK_OLLAMA_MODEL:-qwen2.5-coder:1.5b}
+    GROQ_API_KEY: ${STACK_GROQ_API_KEY:-}
+    GROQ_MODEL: ${STACK_GROQ_MODEL:-openai/gpt-oss-120b}
+    API_BASE_URL: http://api:8000
+    META_PASSWORD: ${STACK_META_PASSWORD:?Run start_all first}
+    ADMIN_PASSWORD: ${STACK_ADMIN_PASSWORD:?Run start_all first}
+    ORACLE_READER_PASSWORD: ${STACK_READER_PASSWORD:?Run start_all first}
+    REDIS_URL: redis://queue:6379/0
+  volumes:
+    - artifacts:/app/uploads
+    - logs:/app/logs
+
+services:
+  queue:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - queue-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  worker:
+    <<: *app
+    command: ["python", "-m", "moderniser.worker"]
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      oracle:
+        condition: service_healthy
+      queue:
+        condition: service_healthy
+
+  oracle:
+    image: gvenzl/oracle-free:23-slim
+    environment:
+      ORACLE_PASSWORD: ${STACK_ORACLE_PASSWORD:?Run start_all first}
+      APP_USER: DEMO
+      APP_USER_PASSWORD: ${STACK_DEMO_PASSWORD:?Run start_all first}
+    volumes:
+      - oracle-data:/opt/oracle/oradata
+    shm_size: 1gb
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 10s
+      retries: 90
+      start_period: 90s
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_PASSWORD: ${STACK_PG_PASSWORD:?Run start_all first}
+      POSTGRES_DB: modernized_db
+      POSTGRES_INITDB_ARGS: --encoding=UTF8
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d modernized_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["local-ai"]
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+
+  bootstrap:
+    <<: *app
+    profiles: ["tools"]
+    command: ["python", "runtime_stack.py", "seed"]
+
+  api:
+    <<: *app
+    environment:
+      META_PASSWORD: ${STACK_META_PASSWORD:?Run start_all first}
+      REDIS_URL: redis://queue:6379/0
+      LLM_PROVIDER: ${STACK_AI_PROVIDER:-none}
+    restart: unless-stopped
+    depends_on:
+      oracle:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${STACK_API_PORT:-18000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=15)"]
+      interval: 15s
+      timeout: 20s
+      retries: 12
+      start_period: 15s
+
+  web:
+    <<: *app
+    environment:
+      API_BASE_URL: http://api:8000
+    volumes: []
+    command: ["python", "-m", "uvicorn", "web_server:app", "--host", "0.0.0.0", "--port", "8501"]
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${STACK_WEB_PORT:-18501}:8501"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/health/live', timeout=5)"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+volumes:
+  queue-data:
+  oracle-data:
+  postgres-data:
+  ollama-data:
+  artifacts:
+  logs:

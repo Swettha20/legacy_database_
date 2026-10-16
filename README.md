@@ -1,6 +1,24 @@
 # Legacy DB Modernizer
 
+## Start everything on a new computer
+
+After cloning, double-click **start_all.bat** on Windows. It bootstraps Docker if needed, downloads the containerised app/databases/AI model, creates private settings and demo data, runs health checks, and opens the website. Stop this stack with **stop_all.bat**; rerun checks with **health_all.bat**. Databases and downloads are retained when stopped.
+
+Linux/macOS with Docker: `sh start_all.sh`, `sh stop_all.sh`, `sh health_all.sh`.
+
+See [START_HERE.md](START_HERE.md) for first-run Windows/WSL requirements, hosted AI mode, ports, troubleshooting and what is actually checked. The new stack uses **http://localhost:18501** (website) and **http://localhost:18000/docs** (API); it is independent of the older native development setup below.
+
+The default browser workspace now uses the dark bronze-and-blue design in [frontend/index.html](frontend/index.html), with API-based uploads, progress and downloads. See [frontend/README.md](frontend/README.md) for its architecture and verified functionality.
+
 An AI-assisted tool that migrates a legacy **Oracle** database to a modern **PostgreSQL** database — schema, data, and stored procedure logic — combining deterministic rule-based translation with AI assistance for genuinely ambiguous decisions, and validating every AI output before trusting it.
+
+## Current upgraded Docker application
+
+Sign in as **admin** with **STACK_ADMIN_PASSWORD** from private `.env.stack`. Follow **Inspect → Review → Approve → Migrate → Verify → Download**. Jobs and files persist across API restarts; each run uses a fresh target. The API, Redis queue and worker are separate services. Rules-only mode is the default for new installations; hosted Groq and local Ollama remain optional.
+
+See [UPGRADE_STATUS.md](UPGRADE_STATUS.md) for architecture, compatibility and recovery, and [benchmarks/README.md](benchmarks/README.md) for the pinned 1,063,396-row public sample and actual evidence. The supplied bronze-and-blue design is preserved.
+
+The sections below include the original standalone development tools and their history. Use the Docker entry points for the authenticated service; legacy CLI scripts do not provide the full control plane or target-isolation guarantees.
 
 ## What this is, honestly
 
@@ -46,14 +64,15 @@ constraints.py — translates UNIQUE / CHECK / DEFAULT and foreign-key shapes.
 generate_report.py — produces a standalone, human-readable confidence
 report from mapped_schema.json.
 
-api.py + streamlit_app.py — wraps the whole pipeline in a FastAPI backend
-and a Streamlit UI, so it runs end-to-end from a single button click.
+api.py + web_server.py + frontend/index.html — a FastAPI backend and a
+buildless, API-driven browser workspace. streamlit_app.py remains an optional
+legacy interface.
 ```
 
 ## Tech stack
 
 - **Docker** — runs Oracle XE and PostgreSQL locally, no native installs
-- **Python** — `oracledb` and `psycopg2` drivers, FastAPI, Streamlit
+- **Python** — `oracledb` and `psycopg2` drivers, FastAPI; HTML/CSS/JavaScript frontend
 - **AI provider (your choice, one setting)** — **Ollama** (`codellama:7b`, runs locally: free, private, no API key, no internet) or **Groq** (`openai/gpt-oss-120b`, free-tier cloud API: needs a free API key and internet, noticeably more reliable on the harder translation task)
 
 ## What's built and verified
@@ -75,7 +94,7 @@ and a Streamlit UI, so it runs end-to-end from a single button click.
 - Upload an Oracle SQL file on the web page and download the converted PostgreSQL files (see [Converting an uploaded Oracle script](#converting-an-uploaded-oracle-script))
 - A second sample database with a different shape (a medical clinic - see [Second sample](#second-sample-a-medical-clinic)), run end to end with one command
 - A standalone confidence/flagging report
-- A working REST API (FastAPI) and browser UI (Streamlit), with confirmed graceful failure handling when a database is unreachable
+- A working REST API (FastAPI) and API-driven browser workspace, with confirmed graceful failure handling when a database is unreachable
 
 **Verification status, stated plainly.** The three-table sample schema, the AI type advisor, and eight stored procedures were run end to end against a real Oracle XE container, a real PostgreSQL and a real AI provider. Larger and messier schemas, dirty data, volume, and failure cases (a database or the AI going down mid-run) were tested against a real PostgreSQL with a simulated Oracle source. The scale tested is about a million rows; nothing near gigabytes has been tried.
 
@@ -278,7 +297,7 @@ To start the two servers yourself instead, in two terminals:
 uvicorn api:app
 ```
 ```powershell
-streamlit run streamlit_app.py
+uvicorn web_server:app --host 127.0.0.1 --port 8501
 ```
 
 Note: use `uvicorn api:app --reload` only while developing. With `--reload`, saving any file restarts the server and kills a migration that is running.
@@ -315,7 +334,7 @@ The file's *content* decides what it is (a PHP script saved as `.txt` is still P
 Documented honestly rather than hidden:
 
 - **Additional database pairs** — this tool supports Oracle → PostgreSQL specifically. The IR-based architecture is designed to support additional pairs without a rewrite, but that wasn't built, to keep this one pair genuinely solid rather than several pairs half-working.
-- **Celery/Redis background job queue, a full React dashboard, true GB-scale stress testing** — deferred in favor of a simpler FastAPI + Streamlit stack that fit a focused build timeline. The batching logic used for data migration is the same pattern that would scale to larger data; it just hasn't been tested at GB scale.
+- **Celery/Redis background job queue, a full React dashboard, true GB-scale stress testing** — deferred in favor of a focused FastAPI + buildless frontend stack that fit a focused build timeline. The batching logic used for data migration is the same pattern that would scale to larger data; it just hasn't been tested at GB scale.
 - **Source database performance-parameter migration** — this tool migrates schema, data, and logic. A source database's tuning (memory allocation, connection limits, etc.) is tied to its specific hardware and workload and doesn't transfer meaningfully to different target hardware — intentionally not attempted.
 - **Reported but not migrated:** ordinary indexes, views, triggers, packages and standalone sequences are listed in the report so nothing is lost silently, but they are not translated. Exotic column types (`XMLTYPE`, `INTERVAL`, spatial) are flagged for manual work, and circular foreign keys between tables are refused with a clear message.
 - **Proof of logical equivalence for stored procedures** — the checks catch known classes of mistakes and the differential checker compares behaviour for the calls you list, but neither can prove a translation equivalent for every input.

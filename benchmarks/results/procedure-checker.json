@@ -1,0 +1,220 @@
+{
+  "cases": [
+    {
+      "case": {
+        "call": "twice",
+        "args": [
+          0
+        ],
+        "returns": "number"
+      },
+      "status": "SAME",
+      "differences": [],
+      "detail": "",
+      "oracle": {
+        "value": 0,
+        "outs": [],
+        "error": null,
+        "notices": [],
+        "observations": []
+      },
+      "postgres": {
+        "value": "0",
+        "outs": [],
+        "error": null,
+        "notices": [],
+        "observations": []
+      },
+      "retried": false
+    },
+    {
+      "case": {
+        "call": "twice",
+        "args": [
+          1
+        ],
+        "returns": "number"
+      },
+      "status": "SAME",
+      "differences": [],
+      "detail": "",
+      "oracle": {
+        "value": 2,
+        "outs": [],
+        "error": null,
+        "notices": [],
+        "observations": []
+      },
+      "postgres": {
+        "value": "2",
+        "outs": [],
+        "error": null,
+        "notices": [],
+        "observations": []
+      },
+      "retried": false
+    },
+    {
+      "case": {
+        "call": "twice",
+        "args": [
+          -2
+        ],
+        "returns": "number"
+      },
+      "status": "SAME",
+      "differences": [],
+      "detail": "",
+      "oracle": {
+        "value": -4,
+        "outs": [],
+        "error": null,
+        "notices": [],
+        "observations": []
+      },
+      "postgres": {
+        "value": "-4",
+        "outs": [],
+        "error": null,
+        "notices": [],
+        "observations": []
+      },
+      "retried": false
+    },
+    {
+      "case": {
+        "call": "twice",
+        "args": [
+          0.1
+        ],
+        "returns": "number"
+      },
+      "status": "SAME",
+      "differences": [],
+      "detail": "",
+      "oracle": {
+        "value": 0.2,
+        "outs": [],
+        "error": null,
+        "notices": [],
+        "observations": []
+      },
+      "postgres": {
+        "value": "0.2",
+        "outs": [],
+        "error": null,
+        "notices": [],
+        "observations": []
+      },
+      "retried": false
+    },
+    {
+      "case": {
+        "call": "twice",
+        "args": [
+          null
+        ],
+        "returns": "number"
+      },
+      "status": "SAME",
+      "differences": [],
+      "detail": "",
+      "oracle": {
+        "value": null,
+        "outs": [],
+        "error": null,
+        "notices": [],
+        "observations": []
+      },
+      "postgres": {
+        "value": null,
+        "outs": [],
+        "error": null,
+        "notices": [],
+        "observations": []
+      },
+      "retried": false
+    },
+    {
+      "case": {
+        "call": "increase_quantity",
+        "args": [
+          1,
+          2
+        ],
+        "observe": [
+          "SELECT id,qty FROM items ORDER BY id"
+        ]
+      },
+      "status": "SAME",
+      "differences": [],
+      "detail": "",
+      "oracle": {
+        "value": null,
+        "outs": [],
+        "error": null,
+        "notices": [],
+        "observations": [
+          [
+            [
+              "1",
+              "7"
+            ]
+          ]
+        ]
+      },
+      "postgres": {
+        "value": null,
+        "outs": [],
+        "error": null,
+        "notices": [],
+        "observations": [
+          [
+            [
+              1,
+              7
+            ]
+          ]
+        ]
+      },
+      "retried": false
+    },
+    {
+      "case": {
+        "call": "increase_quantity",
+        "args": [
+          1,
+          0
+        ]
+      },
+      "status": "SAME",
+      "differences": [],
+      "detail": "",
+      "oracle": {
+        "value": null,
+        "outs": [],
+        "error": {
+          "class": "P0001",
+          "message": "Quantity must be positive",
+          "native": "ORA-20001"
+        },
+        "notices": [],
+        "observations": []
+      },
+      "postgres": {
+        "value": null,
+        "outs": [],
+        "error": {
+          "class": "P0001",
+          "message": "Quantity must be positive",
+          "native": "SQLSTATE P0001"
+        },
+        "notices": [],
+        "observations": []
+      },
+      "retried": false
+    }
+  ],
+  "passed": true,
+  "scope": "Checker verified against explicitly equivalent fixtures; does not certify AI translation."
+}

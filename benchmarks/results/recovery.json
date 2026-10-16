@@ -1,0 +1,5011 @@
+{
+  "checks": [
+    {
+      "name": "existing artifact starts intact",
+      "passed": true
+    },
+    {
+      "name": "API restart retains authenticated history",
+      "passed": true
+    },
+    {
+      "name": "API restart leaves worker job active",
+      "passed": true
+    },
+    {
+      "name": "cooperative cancellation confirmed",
+      "passed": true
+    },
+    {
+      "name": "cancel preserves previous artifact",
+      "passed": true
+    },
+    {
+      "name": "worker loss becomes explicit interrupted job",
+      "passed": true
+    },
+    {
+      "name": "worker loss preserves previous artifact",
+      "passed": true
+    },
+    {
+      "name": "retry has a new job identity",
+      "passed": true
+    },
+    {
+      "name": "fresh retry passes data and restored export",
+      "passed": true
+    },
+    {
+      "name": "fresh retry uses a separate target",
+      "passed": true
+    },
+    {
+      "name": "duplicate delivery does not repeat phases",
+      "passed": true
+    },
+    {
+      "name": "recovery preserves original artifact",
+      "passed": true
+    }
+  ],
+  "cancelled_job": "739e551d-3db2-4b51-b35f-5792a048356a",
+  "interrupted_job": "3888c210-f8be-4d13-af31-7c34c63df340",
+  "retried_job": "4d1f48b1-f969-4e20-b9d8-92ad3f34b01b",
+  "final_job": {
+    "id": "4d1f48b1-f969-4e20-b9d8-92ad3f34b01b",
+    "mode": "database",
+    "step": 8,
+    "error": null,
+    "lease": "275a5b16-0421-4cef-bfac-3b23f2f3bdc0",
+    "owner": "admin",
+    "phase": "finalizing_files",
+    "steps": [
+      {
+        "key": "loading_script",
+        "label": "Import source safely"
+      },
+      {
+        "key": "reading_schema",
+        "label": "Inspect source"
+      },
+      {
+        "key": "mapping_types",
+        "label": "Review exact type mappings"
+      },
+      {
+        "key": "writing_postgres_schema",
+        "label": "Create isolated target"
+      },
+      {
+        "key": "migrating_data",
+        "label": "Copy rows"
+      },
+      {
+        "key": "verifying_data",
+        "label": "Compare every value"
+      },
+      {
+        "key": "exporting_files",
+        "label": "Build downloads"
+      },
+      {
+        "key": "restoring_export",
+        "label": "Restore and verify download"
+      }
+    ],
+    "status": "completed_with_warnings",
+    "tables": {
+      "costs": {
+        "rows": 82112,
+        "state": "committed",
+        "seconds": 1.3955543041229248
+      },
+      "sales": {
+        "rows": 918843,
+        "state": "committed",
+        "seconds": 19.66736102104187
+      },
+      "times": {
+        "rows": 1826,
+        "state": "committed",
+        "seconds": 0.05586695671081543
+      },
+      "channels": {
+        "rows": 5,
+        "state": "committed",
+        "seconds": 0.013199806213378906
+      },
+      "products": {
+        "rows": 72,
+        "state": "committed",
+        "seconds": 0.019465208053588867
+      },
+      "countries": {
+        "rows": 35,
+        "state": "committed",
+        "seconds": 0.013973236083984375
+      },
+      "customers": {
+        "rows": 55500,
+        "state": "committed",
+        "seconds": 1.1995460987091064
+      },
+      "promotions": {
+        "rows": 503,
+        "state": "committed",
+        "seconds": 0.018606185913085938
+      },
+      "supplementary_demographics": {
+        "rows": 4500,
+        "state": "committed",
+        "seconds": 0.06731724739074707
+      }
+    },
+    "target": {
+      "postgres_database": "upload_4d1f48b1f9694e20b9d892ad3f34b01b"
+    },
+    "failure": null,
+    "plan_id": null,
+    "summary": {
+      "tables": {
+        "costs": {
+          "rows": 82112,
+          "seconds": 1.413022756576538
+        },
+        "sales": {
+          "rows": 918843,
+          "seconds": 19.695586919784546
+        },
+        "times": {
+          "rows": 1826,
+          "seconds": 0.07349419593811035
+        },
+        "channels": {
+          "rows": 5,
+          "seconds": 0.029693603515625
+        },
+        "products": {
+          "rows": 72,
+          "seconds": 0.04166698455810547
+        },
+        "countries": {
+          "rows": 35,
+          "seconds": 0.0284883975982666
+        },
+        "customers": {
+          "rows": 55500,
+          "seconds": 1.22072434425354
+        },
+        "promotions": {
+          "rows": 503,
+          "seconds": 0.034615516662597656
+        },
+        "supplementary_demographics": {
+          "rows": 4500,
+          "seconds": 0.08467411994934082
+        }
+      },
+      "seconds": 23.30686616897583,
+      "warnings": [],
+      "total_rows": 1063396
+    },
+    "mappings": {},
+    "warnings": [
+      "Objects requiring manual review (DIMENSION): CHANNELS_DIM, CUSTOMERS_DIM, PRODUCTS_DIM, PROMOTIONS_DIM, TIMES_DIM",
+      "Objects requiring manual review (MATERIALIZED VIEW): CAL_MONTH_SALES_MV, FWEEK_PSCAT_SALES_MV",
+      "Objects requiring manual review (VIEW): PROFITS",
+      "Objects requiring manual review (partitioned tables): COSTS, SALES",
+      "Objects requiring manual review (indexes): COSTS_PROD_BIX on COSTS (BITMAP), COSTS_TIME_BIX on COSTS (BITMAP), CUSTOMERS_GENDER_BIX on CUSTOMERS (BITMAP), CUSTOMERS_MARITAL_BIX on CUSTOMERS (BITMAP), CUSTOMERS_YOB_BIX on CUSTOMERS (BITMAP), FW_PSC_S_MV_CHAN_BIX on FWEEK_PSCAT_SALES_MV (BITMAP), FW_PSC_S_MV_PROMO_BIX on FWEEK_PSCAT_SALES_MV (BITMAP), FW_PSC_S_MV_SUBCAT_BIX on FWEEK_PSCAT_SALES_MV (BITMAP), FW_PSC_S_MV_WD_BIX on FWEEK_PSCAT_SALES_MV (BITMAP), I_SNAP$_CAL_MONTH_SALES_MV on CAL_MONTH_SALES_MV (FUNCTION-BASED NORMAL), I_SNAP$_FWEEK_PSCAT_SALES_MV on FWEEK_PSCAT_SALES_MV (FUNCTION-BASED NORMAL), PRODUCTS_PROD_STATUS_BIX on PRODUCTS (BITMAP), SALES_CHANNEL_BIX on SALES (BITMAP), SALES_CUST_BIX on SALES (BITMAP), SALES_PROD_BIX on SALES (BITMAP), SALES_PROMO_BIX on SALES (BITMAP), SALES_TIME_BIX on SALES (BITMAP)"
+    ],
+    "artifacts": [
+      {
+        "id": "42452d32-edd8-444b-88ab-04156d575a3f",
+        "size": 55844385,
+        "owner": "admin",
+        "job_id": "4d1f48b1-f969-4e20-b9d8-92ad3f34b01b",
+        "sha256": "d54582893ea81df09655397de3bf6011bc8ded1935da6662b22af2210de70482",
+        "filename": "converted_postgresql.sql",
+        "expires_at": "2026-10-23T16:08:29.885568+00:00"
+      },
+      {
+        "id": "2b813123-c0e8-4dde-bb20-67279f57a134",
+        "size": 3392,
+        "owner": "admin",
+        "job_id": "4d1f48b1-f969-4e20-b9d8-92ad3f34b01b",
+        "sha256": "0175593367fcfc7e255d13f33c97a36b58f94af1b96a49fa1a7f49a286037879",
+        "filename": "report.txt",
+        "expires_at": "2026-10-23T16:08:29.892335+00:00"
+      },
+      {
+        "id": "904c7651-31be-4737-b2fb-a5e70639b0e4",
+        "size": 7920,
+        "owner": "admin",
+        "job_id": "4d1f48b1-f969-4e20-b9d8-92ad3f34b01b",
+        "sha256": "3599bdf6cda1b44cadba45bfb6b883863d5ab296ed6d7cc91561c1d26f071c95",
+        "filename": "worker.log",
+        "expires_at": "2026-10-23T16:08:29.898148+00:00"
+      },
+      {
+        "id": "ffcb42cb-dcc8-4bbf-bdda-2cfca47f3375",
+        "size": 48120,
+        "owner": "admin",
+        "job_id": "4d1f48b1-f969-4e20-b9d8-92ad3f34b01b",
+        "sha256": "1fd124014f304e39ac6f6d030da2bb9320158fc04cc6593a3b5bbcf35b089bce",
+        "filename": "verification.json",
+        "expires_at": "2026-10-23T16:08:29.903894+00:00"
+      },
+      {
+        "id": "788ad786-4e1e-48c8-9c85-b361acf638d4",
+        "size": 44796,
+        "owner": "admin",
+        "job_id": "4d1f48b1-f969-4e20-b9d8-92ad3f34b01b",
+        "sha256": "7c118e16746dc6d646f66f54e2a4d42734983b984dced20c13b33b34eaf383c4",
+        "filename": "mapped_schema.json",
+        "expires_at": "2026-10-23T16:08:29.909570+00:00"
+      },
+      {
+        "id": "fb5d252a-0adc-4d3c-b539-52827630c242",
+        "size": 131062,
+        "owner": "admin",
+        "job_id": "4d1f48b1-f969-4e20-b9d8-92ad3f34b01b",
+        "sha256": "cb2272e8ba2270192c448eb3bfad3318cc2a419e1633b32f312bb0b231d6e357",
+        "filename": "report.json",
+        "expires_at": "2026-10-23T16:08:29.916170+00:00"
+      },
+      {
+        "id": "f878ce3c-dc96-4e82-815c-6793ce3a40e1",
+        "size": 868,
+        "owner": "admin",
+        "job_id": "4d1f48b1-f969-4e20-b9d8-92ad3f34b01b",
+        "sha256": "72ae9f7a02b38d0192175ecf255b5a084be665466f2c365076f4e4d6b320a3f0",
+        "filename": "manifest.json",
+        "expires_at": "2026-10-23T16:08:29.921900+00:00"
+      },
+      {
+        "id": "eafc0240-78b7-43b9-a568-0256562680bf",
+        "size": 6974914,
+        "owner": "admin",
+        "job_id": "4d1f48b1-f969-4e20-b9d8-92ad3f34b01b",
+        "sha256": "2ee8f7c40a97e26e2d0ef2d80d0e2c9009e241ad7710bd160ff8dfecb955175b",
+        "filename": "bundle.zip",
+        "expires_at": "2026-10-23T16:08:29.930726+00:00"
+      }
+    ],
+    "committed": true,
+    "heartbeat": 1792166908.9967961,
+    "upload_id": null,
+    "batch_size": 5000,
+    "created_at": "2026-10-16T16:06:09.894790+00:00",
+    "inspection": {
+      "mapped": {
+        "views": [],
+        "tables": [
+          {
+            "name": "channels",
+            "columns": [
+              {
+                "name": "channel_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "channel_desc",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(20)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "channel_class",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(20)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "channel_class_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "channel_total",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(13)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "channel_total_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              }
+            ],
+            "primary_key": [
+              "channel_id"
+            ],
+            "foreign_keys": [],
+            "check_constraints": [],
+            "unique_constraints": []
+          },
+          {
+            "name": "countries",
+            "columns": [
+              {
+                "name": "country_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "country_iso_code",
+                "note": "Direct equivalent - fixed-length, blank-padded in both databases",
+                "pg_type": "CHAR(2)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "CHAR"
+              },
+              {
+                "name": "country_name",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(40)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "country_subregion",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(30)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "country_subregion_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "country_region",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(20)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "country_region_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "country_total",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(11)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "country_total_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              }
+            ],
+            "primary_key": [
+              "country_id"
+            ],
+            "foreign_keys": [],
+            "check_constraints": [],
+            "unique_constraints": []
+          },
+          {
+            "name": "customers",
+            "columns": [
+              {
+                "name": "cust_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "cust_first_name",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(20)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "cust_last_name",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(40)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "cust_gender",
+                "note": "Direct equivalent - fixed-length, blank-padded in both databases",
+                "pg_type": "CHAR(1)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "CHAR"
+              },
+              {
+                "name": "cust_year_of_birth",
+                "note": "Declared NUMBER(4) is whole-number-only and fits a 32-bit INTEGER (up to 9 digits)",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "cust_marital_status",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(20)",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "cust_street_address",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(40)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "cust_postal_code",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(10)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "cust_city",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(30)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "cust_city_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "cust_state_province",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(40)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "cust_state_province_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "country_id",
+                "note": "Foreign key referencing countries.country_id (NUMERIC) - matched to NUMERIC so the foreign key constraint is valid in Postgres",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "cust_main_phone_number",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(25)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "cust_income_level",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(30)",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "cust_credit_limit",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "cust_email",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(50)",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "cust_total",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(14)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "cust_total_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "cust_src_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "cust_eff_from",
+                "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)",
+                "pg_type": "TIMESTAMP",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "DATE"
+              },
+              {
+                "name": "cust_eff_to",
+                "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)",
+                "pg_type": "TIMESTAMP",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "DATE"
+              },
+              {
+                "name": "cust_valid",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(1)",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              }
+            ],
+            "primary_key": [
+              "cust_id"
+            ],
+            "foreign_keys": [
+              {
+                "name": "customers_country_fk",
+                "columns": [
+                  "country_id"
+                ],
+                "on_delete": "NO ACTION",
+                "references_table": "countries",
+                "references_columns": [
+                  "country_id"
+                ]
+              }
+            ],
+            "check_constraints": [],
+            "unique_constraints": []
+          },
+          {
+            "name": "products",
+            "columns": [
+              {
+                "name": "prod_id",
+                "note": "Declared NUMBER(6) is whole-number-only and fits a 32-bit INTEGER (up to 9 digits)",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "prod_name",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(50)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "prod_desc",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(4000)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "prod_subcategory",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(50)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "prod_subcategory_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "prod_subcategory_desc",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(2000)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "prod_category",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(50)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "prod_category_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "prod_category_desc",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(2000)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "prod_weight_class",
+                "note": "Declared NUMBER(3) is whole-number-only and fits a 32-bit INTEGER (up to 9 digits)",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "prod_unit_of_measure",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(20)",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "prod_pack_size",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(30)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "supplier_id",
+                "note": "Declared NUMBER(6) is whole-number-only and fits a 32-bit INTEGER (up to 9 digits)",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "prod_status",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(20)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "prod_list_price",
+                "note": "Declared NUMBER(8,2) maps to NUMERIC(8,2) - same precision and scale",
+                "pg_type": "NUMERIC(8,2)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "prod_min_price",
+                "note": "Declared NUMBER(8,2) maps to NUMERIC(8,2) - same precision and scale",
+                "pg_type": "NUMERIC(8,2)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "prod_total",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(13)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "prod_total_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "prod_src_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "prod_eff_from",
+                "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)",
+                "pg_type": "TIMESTAMP",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "DATE"
+              },
+              {
+                "name": "prod_eff_to",
+                "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)",
+                "pg_type": "TIMESTAMP",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "DATE"
+              },
+              {
+                "name": "prod_valid",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(1)",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              }
+            ],
+            "primary_key": [
+              "prod_id"
+            ],
+            "foreign_keys": [],
+            "check_constraints": [],
+            "unique_constraints": []
+          },
+          {
+            "name": "promotions",
+            "columns": [
+              {
+                "name": "promo_id",
+                "note": "Declared NUMBER(6) is whole-number-only and fits a 32-bit INTEGER (up to 9 digits)",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "promo_name",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(30)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "promo_subcategory",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(30)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "promo_subcategory_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "promo_category",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(30)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "promo_category_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "promo_cost",
+                "note": "Declared NUMBER(10,2) maps to NUMERIC(10,2) - same precision and scale",
+                "pg_type": "NUMERIC(10,2)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "promo_begin_date",
+                "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)",
+                "pg_type": "TIMESTAMP",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "DATE"
+              },
+              {
+                "name": "promo_end_date",
+                "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)",
+                "pg_type": "TIMESTAMP",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "DATE"
+              },
+              {
+                "name": "promo_total",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(15)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "promo_total_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              }
+            ],
+            "primary_key": [
+              "promo_id"
+            ],
+            "foreign_keys": [],
+            "check_constraints": [],
+            "unique_constraints": []
+          },
+          {
+            "name": "supplementary_demographics",
+            "columns": [
+              {
+                "name": "cust_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "education",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(21)",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "occupation",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(21)",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "household_size",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(21)",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "yrs_residence",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "affinity_card",
+                "note": "Declared NUMBER(10) is whole-number-only and fits a 64-bit BIGINT (up to 18 digits)",
+                "pg_type": "BIGINT",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "cricket",
+                "note": "Declared NUMBER(10) is whole-number-only and fits a 64-bit BIGINT (up to 18 digits)",
+                "pg_type": "BIGINT",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "baseball",
+                "note": "Declared NUMBER(10) is whole-number-only and fits a 64-bit BIGINT (up to 18 digits)",
+                "pg_type": "BIGINT",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "tennis",
+                "note": "Declared NUMBER(10) is whole-number-only and fits a 64-bit BIGINT (up to 18 digits)",
+                "pg_type": "BIGINT",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "soccer",
+                "note": "Declared NUMBER(10) is whole-number-only and fits a 64-bit BIGINT (up to 18 digits)",
+                "pg_type": "BIGINT",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "golf",
+                "note": "Declared NUMBER(10) is whole-number-only and fits a 64-bit BIGINT (up to 18 digits)",
+                "pg_type": "BIGINT",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "unknown",
+                "note": "Declared NUMBER(10) is whole-number-only and fits a 64-bit BIGINT (up to 18 digits)",
+                "pg_type": "BIGINT",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "misc",
+                "note": "Declared NUMBER(10) is whole-number-only and fits a 64-bit BIGINT (up to 18 digits)",
+                "pg_type": "BIGINT",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "comments",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(4000)",
+                "nullable": true,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              }
+            ],
+            "primary_key": [
+              "cust_id"
+            ],
+            "foreign_keys": [],
+            "check_constraints": [],
+            "unique_constraints": []
+          },
+          {
+            "name": "times",
+            "columns": [
+              {
+                "name": "time_id",
+                "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)",
+                "pg_type": "TIMESTAMP",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "DATE"
+              },
+              {
+                "name": "day_name",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(9)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "day_number_in_week",
+                "note": "Declared NUMBER(1) is whole-number-only and fits a 32-bit INTEGER (up to 9 digits)",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "day_number_in_month",
+                "note": "Declared NUMBER(2) is whole-number-only and fits a 32-bit INTEGER (up to 9 digits)",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "calendar_week_number",
+                "note": "Declared NUMBER(2) is whole-number-only and fits a 32-bit INTEGER (up to 9 digits)",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "fiscal_week_number",
+                "note": "Declared NUMBER(2) is whole-number-only and fits a 32-bit INTEGER (up to 9 digits)",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "week_ending_day",
+                "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)",
+                "pg_type": "TIMESTAMP",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "DATE"
+              },
+              {
+                "name": "week_ending_day_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "calendar_month_number",
+                "note": "Declared NUMBER(2) is whole-number-only and fits a 32-bit INTEGER (up to 9 digits)",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "fiscal_month_number",
+                "note": "Declared NUMBER(2) is whole-number-only and fits a 32-bit INTEGER (up to 9 digits)",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "calendar_month_desc",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(8)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "calendar_month_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "fiscal_month_desc",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(8)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "fiscal_month_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "days_in_cal_month",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "days_in_fis_month",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "end_of_cal_month",
+                "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)",
+                "pg_type": "TIMESTAMP",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "DATE"
+              },
+              {
+                "name": "end_of_fis_month",
+                "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)",
+                "pg_type": "TIMESTAMP",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "DATE"
+              },
+              {
+                "name": "calendar_month_name",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(9)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "fiscal_month_name",
+                "note": "Direct equivalent - Postgres VARCHAR behaves the same way",
+                "pg_type": "VARCHAR(9)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "VARCHAR2"
+              },
+              {
+                "name": "calendar_quarter_desc",
+                "note": "Direct equivalent - fixed-length, blank-padded in both databases",
+                "pg_type": "CHAR(7)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "CHAR"
+              },
+              {
+                "name": "calendar_quarter_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "fiscal_quarter_desc",
+                "note": "Direct equivalent - fixed-length, blank-padded in both databases",
+                "pg_type": "CHAR(7)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "CHAR"
+              },
+              {
+                "name": "fiscal_quarter_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "days_in_cal_quarter",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "days_in_fis_quarter",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "end_of_cal_quarter",
+                "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)",
+                "pg_type": "TIMESTAMP",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "DATE"
+              },
+              {
+                "name": "end_of_fis_quarter",
+                "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)",
+                "pg_type": "TIMESTAMP",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "DATE"
+              },
+              {
+                "name": "calendar_quarter_number",
+                "note": "Declared NUMBER(1) is whole-number-only and fits a 32-bit INTEGER (up to 9 digits)",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "fiscal_quarter_number",
+                "note": "Declared NUMBER(1) is whole-number-only and fits a 32-bit INTEGER (up to 9 digits)",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "calendar_year",
+                "note": "Declared NUMBER(4) is whole-number-only and fits a 32-bit INTEGER (up to 9 digits)",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "calendar_year_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "fiscal_year",
+                "note": "Declared NUMBER(4) is whole-number-only and fits a 32-bit INTEGER (up to 9 digits)",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "fiscal_year_id",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "days_in_cal_year",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "days_in_fis_year",
+                "note": "No declared precision: exact unconstrained NUMERIC; no AI guess.",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "end_of_cal_year",
+                "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)",
+                "pg_type": "TIMESTAMP",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "DATE"
+              },
+              {
+                "name": "end_of_fis_year",
+                "note": "Oracle DATE always includes a time component, so TIMESTAMP is the correct equivalent (not Postgres DATE, which is date-only)",
+                "pg_type": "TIMESTAMP",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "DATE"
+              }
+            ],
+            "primary_key": [
+              "time_id"
+            ],
+            "foreign_keys": [],
+            "check_constraints": [],
+            "unique_constraints": []
+          },
+          {
+            "name": "costs",
+            "columns": [
+              {
+                "name": "prod_id",
+                "note": "Foreign key referencing products.prod_id (INTEGER) - matched to INTEGER so the foreign key constraint is valid in Postgres",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "time_id",
+                "note": "Foreign key referencing times.time_id (TIMESTAMP) - matched to TIMESTAMP so the foreign key constraint is valid in Postgres",
+                "pg_type": "TIMESTAMP",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "DATE"
+              },
+              {
+                "name": "promo_id",
+                "note": "Foreign key referencing promotions.promo_id (INTEGER) - matched to INTEGER so the foreign key constraint is valid in Postgres",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "channel_id",
+                "note": "Foreign key referencing channels.channel_id (NUMERIC) - matched to NUMERIC so the foreign key constraint is valid in Postgres",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "unit_cost",
+                "note": "Declared NUMBER(10,2) maps to NUMERIC(10,2) - same precision and scale",
+                "pg_type": "NUMERIC(10,2)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "unit_price",
+                "note": "Declared NUMBER(10,2) maps to NUMERIC(10,2) - same precision and scale",
+                "pg_type": "NUMERIC(10,2)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              }
+            ],
+            "primary_key": [],
+            "foreign_keys": [
+              {
+                "name": "costs_channel_fk",
+                "columns": [
+                  "channel_id"
+                ],
+                "on_delete": "NO ACTION",
+                "references_table": "channels",
+                "references_columns": [
+                  "channel_id"
+                ]
+              },
+              {
+                "name": "costs_product_fk",
+                "columns": [
+                  "prod_id"
+                ],
+                "on_delete": "NO ACTION",
+                "references_table": "products",
+                "references_columns": [
+                  "prod_id"
+                ]
+              },
+              {
+                "name": "costs_promo_fk",
+                "columns": [
+                  "promo_id"
+                ],
+                "on_delete": "NO ACTION",
+                "references_table": "promotions",
+                "references_columns": [
+                  "promo_id"
+                ]
+              },
+              {
+                "name": "costs_time_fk",
+                "columns": [
+                  "time_id"
+                ],
+                "on_delete": "NO ACTION",
+                "references_table": "times",
+                "references_columns": [
+                  "time_id"
+                ]
+              }
+            ],
+            "check_constraints": [],
+            "unique_constraints": []
+          },
+          {
+            "name": "sales",
+            "columns": [
+              {
+                "name": "prod_id",
+                "note": "Foreign key referencing products.prod_id (INTEGER) - matched to INTEGER so the foreign key constraint is valid in Postgres",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "cust_id",
+                "note": "Foreign key referencing customers.cust_id (NUMERIC) - matched to NUMERIC so the foreign key constraint is valid in Postgres",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "time_id",
+                "note": "Foreign key referencing times.time_id (TIMESTAMP) - matched to TIMESTAMP so the foreign key constraint is valid in Postgres",
+                "pg_type": "TIMESTAMP",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "DATE"
+              },
+              {
+                "name": "channel_id",
+                "note": "Foreign key referencing channels.channel_id (NUMERIC) - matched to NUMERIC so the foreign key constraint is valid in Postgres",
+                "pg_type": "NUMERIC",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "promo_id",
+                "note": "Foreign key referencing promotions.promo_id (INTEGER) - matched to INTEGER so the foreign key constraint is valid in Postgres",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "quantity_sold",
+                "note": "Declared NUMBER(3) is whole-number-only and fits a 32-bit INTEGER (up to 9 digits)",
+                "pg_type": "INTEGER",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              },
+              {
+                "name": "amount_sold",
+                "note": "Declared NUMBER(10,2) maps to NUMERIC(10,2) - same precision and scale",
+                "pg_type": "NUMERIC(10,2)",
+                "nullable": false,
+                "confidence": "high",
+                "source_type": "NUMBER"
+              }
+            ],
+            "primary_key": [],
+            "foreign_keys": [
+              {
+                "name": "sales_channel_fk",
+                "columns": [
+                  "channel_id"
+                ],
+                "on_delete": "NO ACTION",
+                "references_table": "channels",
+                "references_columns": [
+                  "channel_id"
+                ]
+              },
+              {
+                "name": "sales_customer_fk",
+                "columns": [
+                  "cust_id"
+                ],
+                "on_delete": "NO ACTION",
+                "references_table": "customers",
+                "references_columns": [
+                  "cust_id"
+                ]
+              },
+              {
+                "name": "sales_product_fk",
+                "columns": [
+                  "prod_id"
+                ],
+                "on_delete": "NO ACTION",
+                "references_table": "products",
+                "references_columns": [
+                  "prod_id"
+                ]
+              },
+              {
+                "name": "sales_promo_fk",
+                "columns": [
+                  "promo_id"
+                ],
+                "on_delete": "NO ACTION",
+                "references_table": "promotions",
+                "references_columns": [
+                  "promo_id"
+                ]
+              },
+              {
+                "name": "sales_time_fk",
+                "columns": [
+                  "time_id"
+                ],
+                "on_delete": "NO ACTION",
+                "references_table": "times",
+                "references_columns": [
+                  "time_id"
+                ]
+              }
+            ],
+            "check_constraints": [],
+            "unique_constraints": []
+          }
+        ],
+        "indexes": [
+          {
+            "name": "products_prod_cat_ix",
+            "table": "products",
+            "unique": false,
+            "columns": [
+              {
+                "name": "prod_category",
+                "direction": "ASC"
+              }
+            ]
+          },
+          {
+            "name": "products_prod_subcat_ix",
+            "table": "products",
+            "unique": false,
+            "columns": [
+              {
+                "name": "prod_subcategory",
+                "direction": "ASC"
+              }
+            ]
+          }
+        ],
+        "not_migrated": {
+          "VIEW": [
+            "PROFITS"
+          ],
+          "indexes": [
+            "COSTS_PROD_BIX on COSTS (BITMAP)",
+            "COSTS_TIME_BIX on COSTS (BITMAP)",
+            "CUSTOMERS_GENDER_BIX on CUSTOMERS (BITMAP)",
+            "CUSTOMERS_MARITAL_BIX on CUSTOMERS (BITMAP)",
+            "CUSTOMERS_YOB_BIX on CUSTOMERS (BITMAP)",
+            "FW_PSC_S_MV_CHAN_BIX on FWEEK_PSCAT_SALES_MV (BITMAP)",
+            "FW_PSC_S_MV_PROMO_BIX on FWEEK_PSCAT_SALES_MV (BITMAP)",
+            "FW_PSC_S_MV_SUBCAT_BIX on FWEEK_PSCAT_SALES_MV (BITMAP)",
+            "FW_PSC_S_MV_WD_BIX on FWEEK_PSCAT_SALES_MV (BITMAP)",
+            "I_SNAP$_CAL_MONTH_SALES_MV on CAL_MONTH_SALES_MV (FUNCTION-BASED NORMAL)",
+            "I_SNAP$_FWEEK_PSCAT_SALES_MV on FWEEK_PSCAT_SALES_MV (FUNCTION-BASED NORMAL)",
+            "PRODUCTS_PROD_STATUS_BIX on PRODUCTS (BITMAP)",
+            "SALES_CHANNEL_BIX on SALES (BITMAP)",
+            "SALES_CUST_BIX on SALES (BITMAP)",
+            "SALES_PROD_BIX on SALES (BITMAP)",
+            "SALES_PROMO_BIX on SALES (BITMAP)",
+            "SALES_TIME_BIX on SALES (BITMAP)"
+          ],
+          "DIMENSION": [
+            "CHANNELS_DIM",
+            "CUSTOMERS_DIM",
+            "PRODUCTS_DIM",
+            "PROMOTIONS_DIM",
+            "TIMES_DIM"
+          ],
+          "MATERIALIZED VIEW": [
+            "CAL_MONTH_SALES_MV",
+            "FWEEK_PSCAT_SALES_MV"
+          ],
+          "partitioned tables": [
+            "COSTS",
+            "SALES"
+          ]
+        }
+      },
+      "blockers": [],
+      "profiles": {
+        "COSTS.PROD_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "148",
+          "minimum": "13",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "SALES.CUST_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "50833",
+          "minimum": "2",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "SALES.PROD_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "148",
+          "minimum": "14",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "COSTS.PROMO_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "999",
+          "minimum": "999",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "SALES.PROMO_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "999",
+          "minimum": "999",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "COSTS.UNIT_COST": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1225.42",
+          "minimum": "5.92",
+          "sampled_rows": 1000,
+          "fractional_values": 991
+        },
+        "COSTS.CHANNEL_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "4",
+          "minimum": "2",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "COSTS.UNIT_PRICE": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1753.2",
+          "minimum": "7.13",
+          "sampled_rows": 1000,
+          "fractional_values": 987
+        },
+        "PRODUCTS.PROD_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "148",
+          "minimum": "13",
+          "sampled_rows": 72,
+          "fractional_values": 0
+        },
+        "SALES.CHANNEL_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "4",
+          "minimum": "2",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "CUSTOMERS.CUST_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "50578",
+          "minimum": "1",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "SALES.AMOUNT_SOLD": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1728.99",
+          "minimum": "9.71",
+          "sampled_rows": 1000,
+          "fractional_values": 1000
+        },
+        "TIMES.FISCAL_YEAR": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "2022",
+          "minimum": "2019",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "CHANNELS.CHANNEL_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "9",
+          "minimum": "2",
+          "sampled_rows": 5,
+          "fractional_values": 0
+        },
+        "PROMOTIONS.PROMO_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "999",
+          "minimum": "33",
+          "sampled_rows": 503,
+          "fractional_values": 0
+        },
+        "SALES.QUANTITY_SOLD": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1",
+          "minimum": "1",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "TIMES.CALENDAR_YEAR": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "2022",
+          "minimum": "2019",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "COUNTRIES.COUNTRY_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "52803",
+          "minimum": "52769",
+          "sampled_rows": 35,
+          "fractional_values": 0
+        },
+        "CUSTOMERS.COUNTRY_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "52791",
+          "minimum": "52769",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "PRODUCTS.PROD_SRC_ID": {
+          "nulls": 72,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": null,
+          "minimum": null,
+          "sampled_rows": 72,
+          "fractional_values": 0
+        },
+        "PRODUCTS.SUPPLIER_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1",
+          "minimum": "1",
+          "sampled_rows": 72,
+          "fractional_values": 0
+        },
+        "TIMES.FISCAL_YEAR_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1809",
+          "minimum": "1806",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "CUSTOMERS.CUST_SRC_ID": {
+          "nulls": 1000,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": null,
+          "minimum": null,
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "PROMOTIONS.PROMO_COST": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "100000",
+          "minimum": "0",
+          "sampled_rows": 503,
+          "fractional_values": 0
+        },
+        "TIMES.FISCAL_MONTH_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1758",
+          "minimum": "1720",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "CUSTOMERS.CUST_CITY_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "52531",
+          "minimum": "51040",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "PRODUCTS.PROD_TOTAL_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1",
+          "minimum": "1",
+          "sampled_rows": 72,
+          "fractional_values": 0
+        },
+        "TIMES.CALENDAR_YEAR_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1805",
+          "minimum": "1802",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "TIMES.DAYS_IN_CAL_YEAR": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "366",
+          "minimum": "365",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "TIMES.DAYS_IN_FIS_YEAR": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "371",
+          "minimum": "361",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "CUSTOMERS.CUST_TOTAL_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "52772",
+          "minimum": "52772",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "PRODUCTS.PROD_MIN_PRICE": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1299.99",
+          "minimum": "6.99",
+          "sampled_rows": 72,
+          "fractional_values": 72
+        },
+        "TIMES.CALENDAR_MONTH_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1710",
+          "minimum": "1672",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "TIMES.DAYS_IN_CAL_MONTH": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "31",
+          "minimum": "28",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "TIMES.DAYS_IN_FIS_MONTH": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "35",
+          "minimum": "25",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "TIMES.FISCAL_QUARTER_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1797",
+          "minimum": "1785",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "PRODUCTS.PROD_LIST_PRICE": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1299.99",
+          "minimum": "6.99",
+          "sampled_rows": 72,
+          "fractional_values": 72
+        },
+        "TIMES.DAY_NUMBER_IN_WEEK": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "7",
+          "minimum": "1",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "TIMES.FISCAL_WEEK_NUMBER": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "53",
+          "minimum": "1",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "TIMES.WEEK_ENDING_DAY_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1671",
+          "minimum": "1463",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "CHANNELS.CHANNEL_CLASS_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "14",
+          "minimum": "12",
+          "sampled_rows": 5,
+          "fractional_values": 0
+        },
+        "CHANNELS.CHANNEL_TOTAL_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1",
+          "minimum": "1",
+          "sampled_rows": 5,
+          "fractional_values": 0
+        },
+        "PRODUCTS.PROD_CATEGORY_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "205",
+          "minimum": "201",
+          "sampled_rows": 72,
+          "fractional_values": 0
+        },
+        "PROMOTIONS.PROMO_TOTAL_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1",
+          "minimum": "1",
+          "sampled_rows": 503,
+          "fractional_values": 0
+        },
+        "TIMES.CALENDAR_QUARTER_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1781",
+          "minimum": "1769",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "TIMES.DAYS_IN_CAL_QUARTER": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "92",
+          "minimum": "90",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "TIMES.DAYS_IN_FIS_QUARTER": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "98",
+          "minimum": "84",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "TIMES.DAY_NUMBER_IN_MONTH": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "31",
+          "minimum": "1",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "TIMES.FISCAL_MONTH_NUMBER": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "12",
+          "minimum": "1",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "COUNTRIES.COUNTRY_TOTAL_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "52806",
+          "minimum": "52806",
+          "sampled_rows": 35,
+          "fractional_values": 0
+        },
+        "PRODUCTS.PROD_WEIGHT_CLASS": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "4",
+          "minimum": "1",
+          "sampled_rows": 72,
+          "fractional_values": 0
+        },
+        "TIMES.CALENDAR_WEEK_NUMBER": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "53",
+          "minimum": "1",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "COUNTRIES.COUNTRY_REGION_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "52805",
+          "minimum": "52798",
+          "sampled_rows": 35,
+          "fractional_values": 0
+        },
+        "CUSTOMERS.CUST_CREDIT_LIMIT": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "15000",
+          "minimum": "1500",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "TIMES.CALENDAR_MONTH_NUMBER": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "12",
+          "minimum": "1",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "TIMES.FISCAL_QUARTER_NUMBER": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "4",
+          "minimum": "1",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "CUSTOMERS.CUST_YEAR_OF_BIRTH": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "2000",
+          "minimum": "1932",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "PRODUCTS.PROD_SUBCATEGORY_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "2056",
+          "minimum": "2011",
+          "sampled_rows": 72,
+          "fractional_values": 0
+        },
+        "PROMOTIONS.PROMO_CATEGORY_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "10",
+          "minimum": "2",
+          "sampled_rows": 503,
+          "fractional_values": 0
+        },
+        "TIMES.CALENDAR_QUARTER_NUMBER": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "4",
+          "minimum": "1",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "COUNTRIES.COUNTRY_SUBREGION_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "52799",
+          "minimum": "52792",
+          "sampled_rows": 35,
+          "fractional_values": 0
+        },
+        "PROMOTIONS.PROMO_SUBCATEGORY_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "32",
+          "minimum": "11",
+          "sampled_rows": 503,
+          "fractional_values": 0
+        },
+        "SUPPLEMENTARY_DEMOGRAPHICS.GOLF": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1",
+          "minimum": "1",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "SUPPLEMENTARY_DEMOGRAPHICS.MISC": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1",
+          "minimum": "0",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "CUSTOMERS.CUST_STATE_PROVINCE_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "52771",
+          "minimum": "52533",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "SUPPLEMENTARY_DEMOGRAPHICS.SOCCER": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1",
+          "minimum": "0",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "SUPPLEMENTARY_DEMOGRAPHICS.TENNIS": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1",
+          "minimum": "0",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "SUPPLEMENTARY_DEMOGRAPHICS.CRICKET": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1",
+          "minimum": "0",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "SUPPLEMENTARY_DEMOGRAPHICS.CUST_ID": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "102609",
+          "minimum": "101501",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "SUPPLEMENTARY_DEMOGRAPHICS.UNKNOWN": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1",
+          "minimum": "0",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "SUPPLEMENTARY_DEMOGRAPHICS.BASEBALL": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1",
+          "minimum": "0",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "SUPPLEMENTARY_DEMOGRAPHICS.AFFINITY_CARD": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "1",
+          "minimum": "0",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        },
+        "SUPPLEMENTARY_DEMOGRAPHICS.YRS_RESIDENCE": {
+          "nulls": 0,
+          "scope": "Bounded sample; type safety uses declared rules and full post-load verification",
+          "maximum": "13",
+          "minimum": "0",
+          "sampled_rows": 1000,
+          "fractional_values": 0
+        }
+      },
+      "inventory": {
+        "VIEW": [
+          "PROFITS"
+        ],
+        "indexes": [
+          "COSTS_PROD_BIX on COSTS (BITMAP)",
+          "COSTS_TIME_BIX on COSTS (BITMAP)",
+          "CUSTOMERS_GENDER_BIX on CUSTOMERS (BITMAP)",
+          "CUSTOMERS_MARITAL_BIX on CUSTOMERS (BITMAP)",
+          "CUSTOMERS_YOB_BIX on CUSTOMERS (BITMAP)",
+          "FW_PSC_S_MV_CHAN_BIX on FWEEK_PSCAT_SALES_MV (BITMAP)",
+          "FW_PSC_S_MV_PROMO_BIX on FWEEK_PSCAT_SALES_MV (BITMAP)",
+          "FW_PSC_S_MV_SUBCAT_BIX on FWEEK_PSCAT_SALES_MV (BITMAP)",
+          "FW_PSC_S_MV_WD_BIX on FWEEK_PSCAT_SALES_MV (BITMAP)",
+          "I_SNAP$_CAL_MONTH_SALES_MV on CAL_MONTH_SALES_MV (FUNCTION-BASED NORMAL)",
+          "I_SNAP$_FWEEK_PSCAT_SALES_MV on FWEEK_PSCAT_SALES_MV (FUNCTION-BASED NORMAL)",
+          "PRODUCTS_PROD_STATUS_BIX on PRODUCTS (BITMAP)",
+          "SALES_CHANNEL_BIX on SALES (BITMAP)",
+          "SALES_CUST_BIX on SALES (BITMAP)",
+          "SALES_PROD_BIX on SALES (BITMAP)",
+          "SALES_PROMO_BIX on SALES (BITMAP)",
+          "SALES_TIME_BIX on SALES (BITMAP)"
+        ],
+        "DIMENSION": [
+          "CHANNELS_DIM",
+          "CUSTOMERS_DIM",
+          "PRODUCTS_DIM",
+          "PROMOTIONS_DIM",
+          "TIMES_DIM"
+        ],
+        "MATERIALIZED VIEW": [
+          "CAL_MONTH_SALES_MV",
+          "FWEEK_PSCAT_SALES_MV"
+        ],
+        "partitioned tables": [
+          "COSTS",
+          "SALES"
+        ]
+      },
+      "procedures": "Syntax translation is optional; behavioural equivalence is not certified.",
+      "source_consistency": "common Oracle SCN; snapshot loss fails the job"
+    },
+    "procedures": [],
+    "rows_total": 1063396,
+    "started_at": "2026-10-16T16:06:09.906194+00:00",
+    "started_ts": 1792166769.894802,
+    "step_total": 8,
+    "load_method": "copy",
+    "table_order": [
+      "channels",
+      "countries",
+      "customers",
+      "products",
+      "promotions",
+      "supplementary_demographics",
+      "times",
+      "costs",
+      "sales"
+    ],
+    "completed_at": "2026-10-16T16:08:29.271305+00:00",
+    "inspect_only": false,
+    "snapshot_scn": "2329210",
+    "target_bytes": 153771031,
+    "verification": {
+      "scope": "All supported table values, duplicate multiplicities, nulls and numeric aggregates. Routines/manual objects are not certified.",
+      "passed": true,
+      "tables": {
+        "costs": {
+          "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+          "passed": true,
+          "source": {
+            "rows": 82112,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "numeric_max": [
+              "148",
+              null,
+              "999",
+              "4",
+              "1342.06",
+              "1782.72"
+            ],
+            "numeric_min": [
+              "13",
+              null,
+              "350",
+              "2",
+              "-23.74",
+              "6.4"
+            ],
+            "numeric_totals": [
+              "6191998",
+              "0",
+              "79639207",
+              "238074",
+              "9669397.01",
+              "12172756.46"
+            ]
+          },
+          "target": {
+            "rows": 82112,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "numeric_max": [
+              "148",
+              null,
+              "999",
+              "4",
+              "1342.06",
+              "1782.72"
+            ],
+            "numeric_min": [
+              "13",
+              null,
+              "350",
+              "2",
+              "-23.74",
+              "6.4"
+            ],
+            "numeric_totals": [
+              "6191998",
+              "0",
+              "79639207",
+              "238074",
+              "9669397.01",
+              "12172756.46"
+            ]
+          },
+          "unmatched_rows": 0
+        },
+        "sales": {
+          "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+          "passed": true,
+          "source": {
+            "rows": 918843,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "numeric_max": [
+              "148",
+              "101000",
+              null,
+              "9",
+              "999",
+              "1",
+              "1782.72"
+            ],
+            "numeric_min": [
+              "13",
+              "2",
+              null,
+              "2",
+              "33",
+              "1",
+              "6.4"
+            ],
+            "numeric_totals": [
+              "71838771",
+              "6698188795",
+              "0",
+              "2629364",
+              "897154715",
+              "918843",
+              "98205831.21"
+            ]
+          },
+          "target": {
+            "rows": 918843,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "numeric_max": [
+              "148",
+              "101000",
+              null,
+              "9",
+              "999",
+              "1",
+              "1782.72"
+            ],
+            "numeric_min": [
+              "13",
+              "2",
+              null,
+              "2",
+              "33",
+              "1",
+              "6.4"
+            ],
+            "numeric_totals": [
+              "71838771",
+              "6698188795",
+              "0",
+              "2629364",
+              "897154715",
+              "918843",
+              "98205831.21"
+            ]
+          },
+          "unmatched_rows": 0
+        },
+        "times": {
+          "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+          "passed": true,
+          "source": {
+            "rows": 1826,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "numeric_max": [
+              null,
+              null,
+              "7",
+              "31",
+              "53",
+              "53",
+              null,
+              "2257",
+              "12",
+              "12",
+              null,
+              "2223",
+              null,
+              "2258",
+              "31",
+              "35",
+              null,
+              null,
+              null,
+              null,
+              null,
+              "2150",
+              null,
+              "2260",
+              "92",
+              "98",
+              null,
+              null,
+              "4",
+              "4",
+              "2023",
+              "1813",
+              "2024",
+              "2259",
+              "366",
+              "371",
+              null,
+              null
+            ],
+            "numeric_min": [
+              null,
+              null,
+              "1",
+              "1",
+              "1",
+              "1",
+              null,
+              "1462",
+              "1",
+              "1",
+              null,
+              "1672",
+              null,
+              "1720",
+              "28",
+              "25",
+              null,
+              null,
+              null,
+              null,
+              null,
+              "1769",
+              null,
+              "1785",
+              "90",
+              "1",
+              null,
+              null,
+              "1",
+              "1",
+              "2019",
+              "1802",
+              "2019",
+              "1806",
+              "365",
+              "361",
+              null,
+              null
+            ],
+            "numeric_totals": [
+              "0",
+              "0",
+              "7307",
+              "28719",
+              "48548",
+              "48548",
+              "0",
+              "3029452",
+              "11912",
+              "11947",
+              "0",
+              "3213738",
+              "0",
+              "3282931",
+              "55612",
+              "56198",
+              "0",
+              "0",
+              "0",
+              "0",
+              "0",
+              "3318567",
+              "0",
+              "3341437",
+              "166725",
+              "158496",
+              "0",
+              "0",
+              "4581",
+              "4591",
+              "3690345",
+              "3296658",
+              "3690357",
+              "3302315",
+              "666856",
+              "666171",
+              "0",
+              "0"
+            ]
+          },
+          "target": {
+            "rows": 1826,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "numeric_max": [
+              null,
+              null,
+              "7",
+              "31",
+              "53",
+              "53",
+              null,
+              "2257",
+              "12",
+              "12",
+              null,
+              "2223",
+              null,
+              "2258",
+              "31",
+              "35",
+              null,
+              null,
+              null,
+              null,
+              null,
+              "2150",
+              null,
+              "2260",
+              "92",
+              "98",
+              null,
+              null,
+              "4",
+              "4",
+              "2023",
+              "1813",
+              "2024",
+              "2259",
+              "366",
+              "371",
+              null,
+              null
+            ],
+            "numeric_min": [
+              null,
+              null,
+              "1",
+              "1",
+              "1",
+              "1",
+              null,
+              "1462",
+              "1",
+              "1",
+              null,
+              "1672",
+              null,
+              "1720",
+              "28",
+              "25",
+              null,
+              null,
+              null,
+              null,
+              null,
+              "1769",
+              null,
+              "1785",
+              "90",
+              "1",
+              null,
+              null,
+              "1",
+              "1",
+              "2019",
+              "1802",
+              "2019",
+              "1806",
+              "365",
+              "361",
+              null,
+              null
+            ],
+            "numeric_totals": [
+              "0",
+              "0",
+              "7307",
+              "28719",
+              "48548",
+              "48548",
+              "0",
+              "3029452",
+              "11912",
+              "11947",
+              "0",
+              "3213738",
+              "0",
+              "3282931",
+              "55612",
+              "56198",
+              "0",
+              "0",
+              "0",
+              "0",
+              "0",
+              "3318567",
+              "0",
+              "3341437",
+              "166725",
+              "158496",
+              "0",
+              "0",
+              "4581",
+              "4591",
+              "3690345",
+              "3296658",
+              "3690357",
+              "3302315",
+              "666856",
+              "666171",
+              "0",
+              "0"
+            ]
+          },
+          "unmatched_rows": 0
+        },
+        "channels": {
+          "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+          "passed": true,
+          "source": {
+            "rows": 5,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "numeric_max": [
+              "9",
+              null,
+              null,
+              "14",
+              null,
+              "1"
+            ],
+            "numeric_min": [
+              "2",
+              null,
+              null,
+              "12",
+              null,
+              "1"
+            ],
+            "numeric_totals": [
+              "23",
+              "0",
+              "0",
+              "64",
+              "0",
+              "5"
+            ]
+          },
+          "target": {
+            "rows": 5,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "numeric_max": [
+              "9",
+              null,
+              null,
+              "14",
+              null,
+              "1"
+            ],
+            "numeric_min": [
+              "2",
+              null,
+              null,
+              "12",
+              null,
+              "1"
+            ],
+            "numeric_totals": [
+              "23",
+              "0",
+              "0",
+              "64",
+              "0",
+              "5"
+            ]
+          },
+          "unmatched_rows": 0
+        },
+        "products": {
+          "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+          "passed": true,
+          "source": {
+            "rows": 72,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              72,
+              0,
+              72,
+              0
+            ],
+            "numeric_max": [
+              "148",
+              null,
+              null,
+              null,
+              "2056",
+              null,
+              null,
+              "205",
+              null,
+              "4",
+              null,
+              null,
+              "1",
+              null,
+              "1299.99",
+              "1299.99",
+              null,
+              "1",
+              null,
+              null,
+              null,
+              null
+            ],
+            "numeric_min": [
+              "13",
+              null,
+              null,
+              null,
+              "2011",
+              null,
+              null,
+              "201",
+              null,
+              "1",
+              null,
+              null,
+              "1",
+              null,
+              "6.99",
+              "6.99",
+              null,
+              "1",
+              null,
+              null,
+              null,
+              null
+            ],
+            "numeric_totals": [
+              "5796",
+              "0",
+              "0",
+              "0",
+              "146740",
+              "0",
+              "0",
+              "14650",
+              "0",
+              "75",
+              "0",
+              "0",
+              "72",
+              "0",
+              "10047.28",
+              "10047.28",
+              "0",
+              "72",
+              "0",
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          "target": {
+            "rows": 72,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              72,
+              0,
+              72,
+              0
+            ],
+            "numeric_max": [
+              "148",
+              null,
+              null,
+              null,
+              "2056",
+              null,
+              null,
+              "205",
+              null,
+              "4",
+              null,
+              null,
+              "1",
+              null,
+              "1299.99",
+              "1299.99",
+              null,
+              "1",
+              null,
+              null,
+              null,
+              null
+            ],
+            "numeric_min": [
+              "13",
+              null,
+              null,
+              null,
+              "2011",
+              null,
+              null,
+              "201",
+              null,
+              "1",
+              null,
+              null,
+              "1",
+              null,
+              "6.99",
+              "6.99",
+              null,
+              "1",
+              null,
+              null,
+              null,
+              null
+            ],
+            "numeric_totals": [
+              "5796",
+              "0",
+              "0",
+              "0",
+              "146740",
+              "0",
+              "0",
+              "14650",
+              "0",
+              "75",
+              "0",
+              "0",
+              "72",
+              "0",
+              "10047.28",
+              "10047.28",
+              "0",
+              "72",
+              "0",
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          "unmatched_rows": 0
+        },
+        "countries": {
+          "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+          "passed": true,
+          "source": {
+            "rows": 35,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "numeric_max": [
+              "52803",
+              null,
+              null,
+              null,
+              "52799",
+              null,
+              "52805",
+              null,
+              "52806"
+            ],
+            "numeric_min": [
+              "52769",
+              null,
+              null,
+              null,
+              "52792",
+              null,
+              "52798",
+              null,
+              "52806"
+            ],
+            "numeric_totals": [
+              "1847510",
+              "0",
+              "0",
+              "0",
+              "1847865",
+              "0",
+              "1848083",
+              "0",
+              "1848210"
+            ]
+          },
+          "target": {
+            "rows": 35,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "numeric_max": [
+              "52803",
+              null,
+              null,
+              null,
+              "52799",
+              null,
+              "52805",
+              null,
+              "52806"
+            ],
+            "numeric_min": [
+              "52769",
+              null,
+              null,
+              null,
+              "52792",
+              null,
+              "52798",
+              null,
+              "52806"
+            ],
+            "numeric_totals": [
+              "1847510",
+              "0",
+              "0",
+              "0",
+              "1847865",
+              "0",
+              "1848083",
+              "0",
+              "1848210"
+            ]
+          },
+          "unmatched_rows": 0
+        },
+        "customers": {
+          "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+          "passed": true,
+          "source": {
+            "rows": 55500,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              17506,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              41,
+              0,
+              0,
+              0,
+              0,
+              55500,
+              0,
+              55500,
+              0
+            ],
+            "numeric_max": [
+              "104500",
+              null,
+              null,
+              null,
+              "2001",
+              null,
+              null,
+              null,
+              null,
+              "52531",
+              null,
+              "52771",
+              "52791",
+              null,
+              null,
+              "15000",
+              null,
+              null,
+              "52772",
+              null,
+              null,
+              null,
+              null
+            ],
+            "numeric_min": [
+              "1",
+              null,
+              null,
+              null,
+              "1924",
+              null,
+              null,
+              null,
+              null,
+              "51040",
+              null,
+              "52533",
+              "52769",
+              null,
+              null,
+              "1500",
+              null,
+              null,
+              "52772",
+              null,
+              null,
+              null,
+              null
+            ],
+            "numeric_totals": [
+              "1760652750",
+              "0",
+              "0",
+              "0",
+              "109246429",
+              "0",
+              "0",
+              "0",
+              "0",
+              "2873111370",
+              "0",
+              "2921292575",
+              "2929391576",
+              "0",
+              "0",
+              "341506000",
+              "0",
+              "0",
+              "2928846000",
+              "0",
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          "target": {
+            "rows": 55500,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              17506,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              41,
+              0,
+              0,
+              0,
+              0,
+              55500,
+              0,
+              55500,
+              0
+            ],
+            "numeric_max": [
+              "104500",
+              null,
+              null,
+              null,
+              "2001",
+              null,
+              null,
+              null,
+              null,
+              "52531",
+              null,
+              "52771",
+              "52791",
+              null,
+              null,
+              "15000",
+              null,
+              null,
+              "52772",
+              null,
+              null,
+              null,
+              null
+            ],
+            "numeric_min": [
+              "1",
+              null,
+              null,
+              null,
+              "1924",
+              null,
+              null,
+              null,
+              null,
+              "51040",
+              null,
+              "52533",
+              "52769",
+              null,
+              null,
+              "1500",
+              null,
+              null,
+              "52772",
+              null,
+              null,
+              null,
+              null
+            ],
+            "numeric_totals": [
+              "1760652750",
+              "0",
+              "0",
+              "0",
+              "109246429",
+              "0",
+              "0",
+              "0",
+              "0",
+              "2873111370",
+              "0",
+              "2921292575",
+              "2929391576",
+              "0",
+              "0",
+              "341506000",
+              "0",
+              "0",
+              "2928846000",
+              "0",
+              "0",
+              "0",
+              "0"
+            ]
+          },
+          "unmatched_rows": 0
+        },
+        "promotions": {
+          "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+          "passed": true,
+          "source": {
+            "rows": 503,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "numeric_max": [
+              "999",
+              null,
+              null,
+              "32",
+              null,
+              "10",
+              "100000",
+              null,
+              null,
+              null,
+              "1"
+            ],
+            "numeric_min": [
+              "33",
+              null,
+              null,
+              "11",
+              null,
+              "2",
+              "0",
+              null,
+              null,
+              null,
+              "1"
+            ],
+            "numeric_totals": [
+              "143316",
+              "0",
+              "0",
+              "10172",
+              "0",
+              "3185",
+              "25230900",
+              "0",
+              "0",
+              "0",
+              "503"
+            ]
+          },
+          "target": {
+            "rows": 503,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "numeric_max": [
+              "999",
+              null,
+              null,
+              "32",
+              null,
+              "10",
+              "100000",
+              null,
+              null,
+              null,
+              "1"
+            ],
+            "numeric_min": [
+              "33",
+              null,
+              null,
+              "11",
+              null,
+              "2",
+              "0",
+              null,
+              null,
+              null,
+              "1"
+            ],
+            "numeric_totals": [
+              "143316",
+              "0",
+              "0",
+              "10172",
+              "0",
+              "3185",
+              "25230900",
+              "0",
+              "0",
+              "0",
+              "503"
+            ]
+          },
+          "unmatched_rows": 0
+        },
+        "supplementary_demographics": {
+          "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+          "passed": true,
+          "source": {
+            "rows": 4500,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              205
+            ],
+            "numeric_max": [
+              "104500",
+              null,
+              null,
+              null,
+              "14",
+              "1",
+              "1",
+              "1",
+              "1",
+              "1",
+              "1",
+              "1",
+              "1",
+              null
+            ],
+            "numeric_min": [
+              "100001",
+              null,
+              null,
+              null,
+              "0",
+              "0",
+              "0",
+              "0",
+              "0",
+              "0",
+              "1",
+              "0",
+              "0",
+              null
+            ],
+            "numeric_totals": [
+              "460127250",
+              "0",
+              "0",
+              "0",
+              "18099",
+              "1072",
+              "2868",
+              "2597",
+              "2539",
+              "3983",
+              "4500",
+              "1406",
+              "11",
+              "0"
+            ]
+          },
+          "target": {
+            "rows": 4500,
+            "nulls": [
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0,
+              205
+            ],
+            "numeric_max": [
+              "104500",
+              null,
+              null,
+              null,
+              "14",
+              "1",
+              "1",
+              "1",
+              "1",
+              "1",
+              "1",
+              "1",
+              "1",
+              null
+            ],
+            "numeric_min": [
+              "100001",
+              null,
+              null,
+              null,
+              "0",
+              "0",
+              "0",
+              "0",
+              "0",
+              "0",
+              "1",
+              "0",
+              "0",
+              null
+            ],
+            "numeric_totals": [
+              "460127250",
+              "0",
+              "0",
+              "0",
+              "18099",
+              "1072",
+              "2868",
+              "2597",
+              "2539",
+              "3983",
+              "4500",
+              "1406",
+              "11",
+              "0"
+            ]
+          },
+          "unmatched_rows": 0
+        }
+      },
+      "structure": {
+        "scope": "Approved types, nullability, PK, UNIQUE, CHECK, FK, ordinary index and supported view definitions",
+        "passed": true,
+        "columns_match": true,
+        "view_definitions_match": true,
+        "index_definitions_match": true,
+        "constraint_definitions_match": true
+      },
+      "procedures": {
+        "scope": "No behavioural test cases were supplied.",
+        "status": "not_tested"
+      },
+      "export_restore": {
+        "passed": true,
+        "tables": {
+          "costs": {
+            "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+            "passed": true,
+            "source": {
+              "rows": 82112,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "numeric_max": [
+                "148",
+                null,
+                "999",
+                "4",
+                "1342.06",
+                "1782.72"
+              ],
+              "numeric_min": [
+                "13",
+                null,
+                "350",
+                "2",
+                "-23.74",
+                "6.4"
+              ],
+              "numeric_totals": [
+                "6191998",
+                "0",
+                "79639207",
+                "238074",
+                "9669397.01",
+                "12172756.46"
+              ]
+            },
+            "target": {
+              "rows": 82112,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "numeric_max": [
+                "148",
+                null,
+                "999",
+                "4",
+                "1342.06",
+                "1782.72"
+              ],
+              "numeric_min": [
+                "13",
+                null,
+                "350",
+                "2",
+                "-23.74",
+                "6.4"
+              ],
+              "numeric_totals": [
+                "6191998",
+                "0",
+                "79639207",
+                "238074",
+                "9669397.01",
+                "12172756.46"
+              ]
+            },
+            "unmatched_rows": 0
+          },
+          "sales": {
+            "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+            "passed": true,
+            "source": {
+              "rows": 918843,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "numeric_max": [
+                "148",
+                "101000",
+                null,
+                "9",
+                "999",
+                "1",
+                "1782.72"
+              ],
+              "numeric_min": [
+                "13",
+                "2",
+                null,
+                "2",
+                "33",
+                "1",
+                "6.4"
+              ],
+              "numeric_totals": [
+                "71838771",
+                "6698188795",
+                "0",
+                "2629364",
+                "897154715",
+                "918843",
+                "98205831.21"
+              ]
+            },
+            "target": {
+              "rows": 918843,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "numeric_max": [
+                "148",
+                "101000",
+                null,
+                "9",
+                "999",
+                "1",
+                "1782.72"
+              ],
+              "numeric_min": [
+                "13",
+                "2",
+                null,
+                "2",
+                "33",
+                "1",
+                "6.4"
+              ],
+              "numeric_totals": [
+                "71838771",
+                "6698188795",
+                "0",
+                "2629364",
+                "897154715",
+                "918843",
+                "98205831.21"
+              ]
+            },
+            "unmatched_rows": 0
+          },
+          "times": {
+            "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+            "passed": true,
+            "source": {
+              "rows": 1826,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "numeric_max": [
+                null,
+                null,
+                "7",
+                "31",
+                "53",
+                "53",
+                null,
+                "2257",
+                "12",
+                "12",
+                null,
+                "2223",
+                null,
+                "2258",
+                "31",
+                "35",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "2150",
+                null,
+                "2260",
+                "92",
+                "98",
+                null,
+                null,
+                "4",
+                "4",
+                "2023",
+                "1813",
+                "2024",
+                "2259",
+                "366",
+                "371",
+                null,
+                null
+              ],
+              "numeric_min": [
+                null,
+                null,
+                "1",
+                "1",
+                "1",
+                "1",
+                null,
+                "1462",
+                "1",
+                "1",
+                null,
+                "1672",
+                null,
+                "1720",
+                "28",
+                "25",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "1769",
+                null,
+                "1785",
+                "90",
+                "1",
+                null,
+                null,
+                "1",
+                "1",
+                "2019",
+                "1802",
+                "2019",
+                "1806",
+                "365",
+                "361",
+                null,
+                null
+              ],
+              "numeric_totals": [
+                "0",
+                "0",
+                "7307",
+                "28719",
+                "48548",
+                "48548",
+                "0",
+                "3029452",
+                "11912",
+                "11947",
+                "0",
+                "3213738",
+                "0",
+                "3282931",
+                "55612",
+                "56198",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "3318567",
+                "0",
+                "3341437",
+                "166725",
+                "158496",
+                "0",
+                "0",
+                "4581",
+                "4591",
+                "3690345",
+                "3296658",
+                "3690357",
+                "3302315",
+                "666856",
+                "666171",
+                "0",
+                "0"
+              ]
+            },
+            "target": {
+              "rows": 1826,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "numeric_max": [
+                null,
+                null,
+                "7",
+                "31",
+                "53",
+                "53",
+                null,
+                "2257",
+                "12",
+                "12",
+                null,
+                "2223",
+                null,
+                "2258",
+                "31",
+                "35",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "2150",
+                null,
+                "2260",
+                "92",
+                "98",
+                null,
+                null,
+                "4",
+                "4",
+                "2023",
+                "1813",
+                "2024",
+                "2259",
+                "366",
+                "371",
+                null,
+                null
+              ],
+              "numeric_min": [
+                null,
+                null,
+                "1",
+                "1",
+                "1",
+                "1",
+                null,
+                "1462",
+                "1",
+                "1",
+                null,
+                "1672",
+                null,
+                "1720",
+                "28",
+                "25",
+                null,
+                null,
+                null,
+                null,
+                null,
+                "1769",
+                null,
+                "1785",
+                "90",
+                "1",
+                null,
+                null,
+                "1",
+                "1",
+                "2019",
+                "1802",
+                "2019",
+                "1806",
+                "365",
+                "361",
+                null,
+                null
+              ],
+              "numeric_totals": [
+                "0",
+                "0",
+                "7307",
+                "28719",
+                "48548",
+                "48548",
+                "0",
+                "3029452",
+                "11912",
+                "11947",
+                "0",
+                "3213738",
+                "0",
+                "3282931",
+                "55612",
+                "56198",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "3318567",
+                "0",
+                "3341437",
+                "166725",
+                "158496",
+                "0",
+                "0",
+                "4581",
+                "4591",
+                "3690345",
+                "3296658",
+                "3690357",
+                "3302315",
+                "666856",
+                "666171",
+                "0",
+                "0"
+              ]
+            },
+            "unmatched_rows": 0
+          },
+          "channels": {
+            "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+            "passed": true,
+            "source": {
+              "rows": 5,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "numeric_max": [
+                "9",
+                null,
+                null,
+                "14",
+                null,
+                "1"
+              ],
+              "numeric_min": [
+                "2",
+                null,
+                null,
+                "12",
+                null,
+                "1"
+              ],
+              "numeric_totals": [
+                "23",
+                "0",
+                "0",
+                "64",
+                "0",
+                "5"
+              ]
+            },
+            "target": {
+              "rows": 5,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "numeric_max": [
+                "9",
+                null,
+                null,
+                "14",
+                null,
+                "1"
+              ],
+              "numeric_min": [
+                "2",
+                null,
+                null,
+                "12",
+                null,
+                "1"
+              ],
+              "numeric_totals": [
+                "23",
+                "0",
+                "0",
+                "64",
+                "0",
+                "5"
+              ]
+            },
+            "unmatched_rows": 0
+          },
+          "products": {
+            "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+            "passed": true,
+            "source": {
+              "rows": 72,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                72,
+                0,
+                72,
+                0
+              ],
+              "numeric_max": [
+                "148",
+                null,
+                null,
+                null,
+                "2056",
+                null,
+                null,
+                "205",
+                null,
+                "4",
+                null,
+                null,
+                "1",
+                null,
+                "1299.99",
+                "1299.99",
+                null,
+                "1",
+                null,
+                null,
+                null,
+                null
+              ],
+              "numeric_min": [
+                "13",
+                null,
+                null,
+                null,
+                "2011",
+                null,
+                null,
+                "201",
+                null,
+                "1",
+                null,
+                null,
+                "1",
+                null,
+                "6.99",
+                "6.99",
+                null,
+                "1",
+                null,
+                null,
+                null,
+                null
+              ],
+              "numeric_totals": [
+                "5796",
+                "0",
+                "0",
+                "0",
+                "146740",
+                "0",
+                "0",
+                "14650",
+                "0",
+                "75",
+                "0",
+                "0",
+                "72",
+                "0",
+                "10047.28",
+                "10047.28",
+                "0",
+                "72",
+                "0",
+                "0",
+                "0",
+                "0"
+              ]
+            },
+            "target": {
+              "rows": 72,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                72,
+                0,
+                72,
+                0
+              ],
+              "numeric_max": [
+                "148",
+                null,
+                null,
+                null,
+                "2056",
+                null,
+                null,
+                "205",
+                null,
+                "4",
+                null,
+                null,
+                "1",
+                null,
+                "1299.99",
+                "1299.99",
+                null,
+                "1",
+                null,
+                null,
+                null,
+                null
+              ],
+              "numeric_min": [
+                "13",
+                null,
+                null,
+                null,
+                "2011",
+                null,
+                null,
+                "201",
+                null,
+                "1",
+                null,
+                null,
+                "1",
+                null,
+                "6.99",
+                "6.99",
+                null,
+                "1",
+                null,
+                null,
+                null,
+                null
+              ],
+              "numeric_totals": [
+                "5796",
+                "0",
+                "0",
+                "0",
+                "146740",
+                "0",
+                "0",
+                "14650",
+                "0",
+                "75",
+                "0",
+                "0",
+                "72",
+                "0",
+                "10047.28",
+                "10047.28",
+                "0",
+                "72",
+                "0",
+                "0",
+                "0",
+                "0"
+              ]
+            },
+            "unmatched_rows": 0
+          },
+          "countries": {
+            "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+            "passed": true,
+            "source": {
+              "rows": 35,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "numeric_max": [
+                "52803",
+                null,
+                null,
+                null,
+                "52799",
+                null,
+                "52805",
+                null,
+                "52806"
+              ],
+              "numeric_min": [
+                "52769",
+                null,
+                null,
+                null,
+                "52792",
+                null,
+                "52798",
+                null,
+                "52806"
+              ],
+              "numeric_totals": [
+                "1847510",
+                "0",
+                "0",
+                "0",
+                "1847865",
+                "0",
+                "1848083",
+                "0",
+                "1848210"
+              ]
+            },
+            "target": {
+              "rows": 35,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "numeric_max": [
+                "52803",
+                null,
+                null,
+                null,
+                "52799",
+                null,
+                "52805",
+                null,
+                "52806"
+              ],
+              "numeric_min": [
+                "52769",
+                null,
+                null,
+                null,
+                "52792",
+                null,
+                "52798",
+                null,
+                "52806"
+              ],
+              "numeric_totals": [
+                "1847510",
+                "0",
+                "0",
+                "0",
+                "1847865",
+                "0",
+                "1848083",
+                "0",
+                "1848210"
+              ]
+            },
+            "unmatched_rows": 0
+          },
+          "customers": {
+            "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+            "passed": true,
+            "source": {
+              "rows": 55500,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                17506,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                41,
+                0,
+                0,
+                0,
+                0,
+                55500,
+                0,
+                55500,
+                0
+              ],
+              "numeric_max": [
+                "104500",
+                null,
+                null,
+                null,
+                "2001",
+                null,
+                null,
+                null,
+                null,
+                "52531",
+                null,
+                "52771",
+                "52791",
+                null,
+                null,
+                "15000",
+                null,
+                null,
+                "52772",
+                null,
+                null,
+                null,
+                null
+              ],
+              "numeric_min": [
+                "1",
+                null,
+                null,
+                null,
+                "1924",
+                null,
+                null,
+                null,
+                null,
+                "51040",
+                null,
+                "52533",
+                "52769",
+                null,
+                null,
+                "1500",
+                null,
+                null,
+                "52772",
+                null,
+                null,
+                null,
+                null
+              ],
+              "numeric_totals": [
+                "1760652750",
+                "0",
+                "0",
+                "0",
+                "109246429",
+                "0",
+                "0",
+                "0",
+                "0",
+                "2873111370",
+                "0",
+                "2921292575",
+                "2929391576",
+                "0",
+                "0",
+                "341506000",
+                "0",
+                "0",
+                "2928846000",
+                "0",
+                "0",
+                "0",
+                "0"
+              ]
+            },
+            "target": {
+              "rows": 55500,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                17506,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                41,
+                0,
+                0,
+                0,
+                0,
+                55500,
+                0,
+                55500,
+                0
+              ],
+              "numeric_max": [
+                "104500",
+                null,
+                null,
+                null,
+                "2001",
+                null,
+                null,
+                null,
+                null,
+                "52531",
+                null,
+                "52771",
+                "52791",
+                null,
+                null,
+                "15000",
+                null,
+                null,
+                "52772",
+                null,
+                null,
+                null,
+                null
+              ],
+              "numeric_min": [
+                "1",
+                null,
+                null,
+                null,
+                "1924",
+                null,
+                null,
+                null,
+                null,
+                "51040",
+                null,
+                "52533",
+                "52769",
+                null,
+                null,
+                "1500",
+                null,
+                null,
+                "52772",
+                null,
+                null,
+                null,
+                null
+              ],
+              "numeric_totals": [
+                "1760652750",
+                "0",
+                "0",
+                "0",
+                "109246429",
+                "0",
+                "0",
+                "0",
+                "0",
+                "2873111370",
+                "0",
+                "2921292575",
+                "2929391576",
+                "0",
+                "0",
+                "341506000",
+                "0",
+                "0",
+                "2928846000",
+                "0",
+                "0",
+                "0",
+                "0"
+              ]
+            },
+            "unmatched_rows": 0
+          },
+          "promotions": {
+            "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+            "passed": true,
+            "source": {
+              "rows": 503,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "numeric_max": [
+                "999",
+                null,
+                null,
+                "32",
+                null,
+                "10",
+                "100000",
+                null,
+                null,
+                null,
+                "1"
+              ],
+              "numeric_min": [
+                "33",
+                null,
+                null,
+                "11",
+                null,
+                "2",
+                "0",
+                null,
+                null,
+                null,
+                "1"
+              ],
+              "numeric_totals": [
+                "143316",
+                "0",
+                "0",
+                "10172",
+                "0",
+                "3185",
+                "25230900",
+                "0",
+                "0",
+                "0",
+                "503"
+              ]
+            },
+            "target": {
+              "rows": 503,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+              ],
+              "numeric_max": [
+                "999",
+                null,
+                null,
+                "32",
+                null,
+                "10",
+                "100000",
+                null,
+                null,
+                null,
+                "1"
+              ],
+              "numeric_min": [
+                "33",
+                null,
+                null,
+                "11",
+                null,
+                "2",
+                "0",
+                null,
+                null,
+                null,
+                "1"
+              ],
+              "numeric_totals": [
+                "143316",
+                "0",
+                "0",
+                "10172",
+                "0",
+                "3185",
+                "25230900",
+                "0",
+                "0",
+                "0",
+                "503"
+              ]
+            },
+            "unmatched_rows": 0
+          },
+          "supplementary_demographics": {
+            "method": "SHA-256 length-framed values; disk-backed multiset including duplicate multiplicities",
+            "passed": true,
+            "source": {
+              "rows": 4500,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                205
+              ],
+              "numeric_max": [
+                "104500",
+                null,
+                null,
+                null,
+                "14",
+                "1",
+                "1",
+                "1",
+                "1",
+                "1",
+                "1",
+                "1",
+                "1",
+                null
+              ],
+              "numeric_min": [
+                "100001",
+                null,
+                null,
+                null,
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "1",
+                "0",
+                "0",
+                null
+              ],
+              "numeric_totals": [
+                "460127250",
+                "0",
+                "0",
+                "0",
+                "18099",
+                "1072",
+                "2868",
+                "2597",
+                "2539",
+                "3983",
+                "4500",
+                "1406",
+                "11",
+                "0"
+              ]
+            },
+            "target": {
+              "rows": 4500,
+              "nulls": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                205
+              ],
+              "numeric_max": [
+                "104500",
+                null,
+                null,
+                null,
+                "14",
+                "1",
+                "1",
+                "1",
+                "1",
+                "1",
+                "1",
+                "1",
+                "1",
+                null
+              ],
+              "numeric_min": [
+                "100001",
+                null,
+                null,
+                null,
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "0",
+                "1",
+                "0",
+                "0",
+                null
+              ],
+              "numeric_totals": [
+                "460127250",
+                "0",
+                "0",
+                "0",
+                "18099",
+                "1072",
+                "2868",
+                "2597",
+                "2539",
+                "3983",
+                "4500",
+                "1406",
+                "11",
+                "0"
+              ]
+            },
+            "unmatched_rows": 0
+          }
+        },
+        "structure": {
+          "scope": "Approved types, nullability, PK, UNIQUE, CHECK, FK, ordinary index and supported view definitions",
+          "passed": true,
+          "columns_match": true,
+          "view_definitions_match": true,
+          "index_definitions_match": true,
+          "constraint_definitions_match": true
+        }
+      }
+    },
+    "phase_seconds": {
+      "mapping_types": 0.152,
+      "migrating_data": 23.336,
+      "reading_schema": 0.334,
+      "verifying_data": 51.414,
+      "exporting_files": 0.593,
+      "restoring_export": 62.82,
+      "writing_postgres_schema": 0.084
+    },
+    "phase_started": 1792166908.996797,
+    "source_schema": "SH",
+    "queued_seconds": 0.011,
+    "elapsed_seconds": 139.37,
+    "procedure_tests": null,
+    "duration_seconds": 138.176,
+    "cluster_wal_bytes": 163023024,
+    "translate_procedures": false,
+    "artifact_disk_free_bytes": 993286189056,
+    "worker_peak_memory_bytes": 86888448,
+    "report_available": true,
+    "file_available": true,
+    "download_available": true
+  }
+}

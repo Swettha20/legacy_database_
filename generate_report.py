@@ -87,6 +87,10 @@ def generate_report(mapped_schema: dict) -> str:
     else:
         lines.append("  Nothing was left behind.")
 
+    for kind in ('indexes','views'):
+        if mapped_schema.get(kind):
+            lines.append('\nSUPPORTED '+kind.upper()+' MIGRATED:')
+            lines.extend('  - '+obj['name'] for obj in mapped_schema[kind])
     not_migrated = mapped_schema.get("not_migrated")
     if not_migrated:
         lines.append("\n" + "-" * 60)

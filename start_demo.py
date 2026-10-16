@@ -197,8 +197,8 @@ def main(argv=None, launcher=None) -> int:
 
     print("5. API and web page")
     launcher = launcher or Launcher([sys.executable, "-m", "uvicorn", "api:app", "--port", str(API_PORT)],
-                                    [sys.executable, "-m", "streamlit", "run", "streamlit_app.py",
-                                     "--server.port", str(UI_PORT), "--server.headless", "true"])
+                                    [sys.executable, "-m", "uvicorn", "web_server:app",
+                                     "--host", "127.0.0.1", "--port", str(UI_PORT)])
     try:
         for name in ("API", "page"):
             ok, why = launcher.start(name)

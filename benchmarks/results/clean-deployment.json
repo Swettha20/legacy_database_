@@ -1,0 +1,10 @@
+{
+    "rules_only":  true,
+    "fresh_named_volumes":  true,
+    "project":  "moderniser-clean-20261016220710",
+    "readiness":  true,
+    "verified_migration":  true,
+    "host_os_install_tested":  false,
+    "oracle_download_cached":  true,
+    "job_id":  "4ab029e7-8667-4e45-bc5a-efbb6e648893"
+}
